@@ -55,4 +55,17 @@ dependencies {
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+
+    implementation files('libs/e1-V02.23.03-release.aar')
+    implementation "androidx.startup:startup-runtime:1.0.0"
+
+    // necessário para comunicação com o Mini PDV M8/M10
+    implementation files('libs/minipdvm8-v01.00.00-release.aar')
+
+    // necessário para comunicação com a linha PosGo
+    implementation("io.reactivex.rxjava2:rxandroid:2.0.1")
+    implementation("io.reactivex.rxjava2:rxjava:2.1.8")
+
+    // https://mvnrepository.com/artifact/com.google.zxing/core
+    api group: 'com.google.zxing', name: 'core', version: '3.4.0'
 }
