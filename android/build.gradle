@@ -61,6 +61,8 @@ dependencies {
 
     // necessário para comunicação com o Mini PDV M8/M10
     implementation files('libs/minipdvm8-v01.00.00-release.aar')
+    implementation files('libs/display-v02.00.00-release.aar')
+    implementation 'com.izettle:html2bitmap:1.9'
 
     // necessário para comunicação com a linha PosGo
     implementation("io.reactivex.rxjava2:rxandroid:2.0.1")
