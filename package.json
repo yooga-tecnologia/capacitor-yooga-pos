@@ -57,7 +57,7 @@
     "@types/node": "^18.11.9",
     "eslint": "^8.57.0",
     "prettier": "^3.3.3",
-    "prettier-plugin-java": "^2.6.4",
+    "prettier-plugin-java": "^2.7.0",
     "rimraf": "^3.0.2",
     "rollup": "^2.32.0",
     "swiftlint": "^1.0.1",
