@@ -5,7 +5,6 @@ import android.webkit.WebView;
 
 import com.capacitor.yooga.pos.elgin.Services.Pix4.Pix4Service;
 import com.capacitor.yooga.pos.elgin.Services.PrinterService;
-import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
@@ -20,13 +19,11 @@ import java.util.Map;
 @CapacitorPlugin(name = "CapacitorYoogaPos")
 public class CapacitorYoogaPosPlugin extends Plugin {
 
-    private CapacitorYoogaPos implementation = new CapacitorYoogaPos();
-
   @PluginMethod
   public void showLogoOnDisplay(PluginCall call) {
     Pix4Service p = new Pix4Service(getActivity());
-
     p.apresentaImagemYooga();
+    call.resolve();
   }
 
   @PluginMethod
@@ -34,19 +31,20 @@ public class CapacitorYoogaPosPlugin extends Plugin {
     String value = call.getString("value");
     Pix4Service p = new Pix4Service(getActivity());
     p.apresentaPix(value);
+    call.resolve();
   }
 
   @PluginMethod
   public void print(PluginCall call) {
     String html = call.getString("html");
-    Integer cutPaperLength = call.getInt("cutPaperLength");
-    Integer webViewZoom = call.getInt("webViewZoom");
-    Integer bitmapWidth = call.getInt("bitmapWidth");
-    Integer measureDelay = call.getInt("measureDelay");
-    Integer screenshotDelay = call.getInt("screenshotDelay");
-    Boolean strictMode = call.getBoolean("strictMode");
-    Integer timeout = call.getInt("timeout");
-    Integer builderTextZoom = call.getInt("builderTextZoom");
+    Integer cutPaperLength = call.getInt("cutPaperLength", 4);
+    Integer webViewZoom = call.getInt("webViewZoom", 100);
+    Integer bitmapWidth = call.getInt("bitmapWidth", 384);
+    Integer measureDelay = call.getInt("measureDelay", 0);
+    Integer screenshotDelay = call.getInt("screenshotDelay", 0);
+    Boolean strictMode = call.getBoolean("strictMode", false);
+    Integer timeout = call.getInt("timeout", 30000);
+    Integer builderTextZoom = call.getInt("builderTextZoom", 100);
 
     PrinterService printerService = new PrinterService(getActivity());
     printerService.printerInternalImpStart();
@@ -79,17 +77,7 @@ public class CapacitorYoogaPosPlugin extends Plugin {
 
     printerService.cutPaper(map);
     printerService.printerStop();
+
+    call.resolve();
   }
-
-    @PluginMethod
-    public void echo(PluginCall call) {
-      String value = call.getString("value");
-      Integer cutPaperLength = call.getInt("cutPaperLength");
-      Integer webViewZoom = call.getInt("webViewZoom");
-
-
-        JSObject ret = new JSObject();
-        ret.put("value", implementation.echo(value));
-        call.resolve(ret);
-    }
 }
