@@ -56,11 +56,18 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
 
-    implementation files('libs/e1-V02.23.03-release.aar')
+    // AGP 8 não permite "implementation files('*.aar')" em uma android-library:
+    // os AARs locais não seriam empacotados no AAR resultante deste plugin.
+    // Por isso declaramos como compileOnly aqui (apenas para compilar) e o app
+    // consumidor empacota os mesmos AARs via flatDir + implementation. Veja o
+    // README para o snippet pronto que precisa ser colado em android/app/build.gradle.
+    compileOnly files('libs/e1-V02.23.03-release.aar')
     implementation "androidx.startup:startup-runtime:1.0.0"
 
     // necessário para comunicação com o Mini PDV M8/M10
-    implementation files('libs/minipdvm8-v01.00.00-release.aar')
+    compileOnly files('libs/minipdvm8-v01.00.00-release.aar')
+    compileOnly files('libs/display-v02.00.00-release.aar')
+    implementation 'com.izettle:html2bitmap:1.9'
 
     // necessário para comunicação com a linha PosGo
     implementation("io.reactivex.rxjava2:rxandroid:2.0.1")

@@ -2,22 +2,30 @@ import Foundation
 import Capacitor
 
 /**
- * Please read the Capacitor iOS Plugin Development Guide
- * here: https://capacitorjs.com/docs/plugins/ios
+ * Hardware-only plugin: o iOS não tem display traseiro / impressora térmica
+ * Elgin, então estes métodos apenas resolvem como no-op para que o app
+ * Capacitor que roda em iOS não quebre ao chamar a mesma API que usa em
+ * Android.
  */
 @objc(CapacitorYoogaPosPlugin)
 public class CapacitorYoogaPosPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "CapacitorYoogaPosPlugin"
     public let jsName = "CapacitorYoogaPos"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "echo", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "showLogoOnDisplay", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "showPix", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "print", returnType: CAPPluginReturnPromise)
     ]
-    private let implementation = CapacitorYoogaPos()
 
-    @objc func echo(_ call: CAPPluginCall) {
-        let value = call.getString("value") ?? ""
-        call.resolve([
-            "value": implementation.echo(value)
-        ])
+    @objc func showLogoOnDisplay(_ call: CAPPluginCall) {
+        call.resolve()
+    }
+
+    @objc func showPix(_ call: CAPPluginCall) {
+        call.resolve()
+    }
+
+    @objc func print(_ call: CAPPluginCall) {
+        call.resolve()
     }
 }
