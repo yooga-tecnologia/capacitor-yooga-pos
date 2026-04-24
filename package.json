@@ -1,7 +1,12 @@
 {
   "name": "capacitor-yooga-pos",
-  "version": "0.0.1",
-  "description": "This is the capacitor plugin for POS",
+  "version": "0.1.0",
+  "description": "Capacitor plugin para hardware POS Elgin (PIX4/TPro/M8/M10) e iMin (D1/M10): display traseiro e impressora térmica.",
+  "author": "Yooga Tecnologia",
+  "homepage": "https://github.com/yooga-tecnologia/capacitor-yooga-pos#readme",
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
   "types": "dist/esm/index.d.ts",
@@ -17,7 +22,6 @@
     "src/",
     "CapacitorYoogaPos.podspec"
   ],
-  "author": "cassianogf",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -29,7 +33,12 @@
   "keywords": [
     "capacitor",
     "plugin",
-    "native"
+    "native",
+    "pos",
+    "elgin",
+    "imin",
+    "thermal-printer",
+    "yooga"
   ],
   "scripts": {
     "verify": "npm run verify:ios && npm run verify:android && npm run verify:web",
