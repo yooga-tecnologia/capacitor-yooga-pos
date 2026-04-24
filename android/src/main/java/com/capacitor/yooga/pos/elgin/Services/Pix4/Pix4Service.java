@@ -4,7 +4,9 @@ import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.os.Build;
 import android.util.Base64;
+import android.util.Log;
 
 import com.capacitor.yooga.pos.R;
 
@@ -12,12 +14,34 @@ import com.elgin.e1.display.E1_Display;
 
 final public class Pix4Service {
 
+  private static final String TAG = "Pix4Service";
+
   private final Activity mActivity;
 
   public Pix4Service(Activity activityRef) {
     mActivity = activityRef;
-    // pode ser especificado pix4 ou tpro
-    E1_Display.init(mActivity, E1_Display.DisplayDevices.AUTO);
+
+    E1_Display.DisplayDevices target = resolveDisplayDevice();
+    Log.i(TAG, "Display device resolvido: " + target
+            + " (manufacturer=" + Build.MANUFACTURER + ", model=" + Build.MODEL + ")");
+    E1_Display.init(mActivity, target);
+  }
+
+  /**
+   * O modo AUTO do SDK Elgin só identifica TPro pelo modelo "I22T01" e cai em
+   * PIX4 para qualquer outro device. Isso quebra nos terminais iMin (D1/M10
+   * com display traseiro estilo TPro): o display fica como "objeto nulo" e a
+   * chamada falha com "Não foi possível concluir a operação".
+   *
+   * Solução: se o fabricante for iMin, força TPRO. Para qualquer outro
+   * (Elgin), mantém AUTO porque a SDK já distingue TPro x PIX4 corretamente.
+   */
+  private static E1_Display.DisplayDevices resolveDisplayDevice() {
+    String manufacturer = Build.MANUFACTURER == null ? "" : Build.MANUFACTURER;
+    if ("iMin".equalsIgnoreCase(manufacturer)) {
+      return E1_Display.DisplayDevices.TPRO;
+    }
+    return E1_Display.DisplayDevices.AUTO;
   }
 
   public int inicializaDisplay() {
