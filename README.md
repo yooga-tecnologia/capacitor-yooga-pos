@@ -43,9 +43,9 @@ dependencies {
     // AARs da Elgin vendorados em capacitor-yooga-pos.
     // AGP 8 não permite empacotar AARs dentro de uma android-library, então
     // o plugin declara como compileOnly e o app empacota aqui.
-    implementation(name: 'e1-V02.23.03-release',         ext: 'aar')
+    // A v02.34.00 já embute libfree_image.so e DisplaySDK, dispensando a AAR display separada.
+    implementation(name: 'e1-V02.34.00-release',         ext: 'aar')
     implementation(name: 'minipdvm8-v01.00.00-release',  ext: 'aar')
-    implementation(name: 'display-v02.00.00-release',    ext: 'aar')
 }
 ```
 
