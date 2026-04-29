@@ -10,7 +10,7 @@ import android.util.Log;
 
 import com.capacitor.yooga.pos.R;
 
-import com.elgin.e1.display.E1_Display;
+import com.elgin.e1.Display.E1_Display;
 
 final public class Pix4Service {
 
