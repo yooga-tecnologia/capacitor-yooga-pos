@@ -37,16 +37,37 @@ public class CapacitorYoogaPosPlugin extends Plugin {
     // service binding assíncrono do minipdvm8 tenha tempo de completar
     // antes da primeira impressão. A doc da Elgin diz: "Caso deseje iniciar
     // uma conexão automática com a impressora, não adicione FechaConexaoImpressora".
-    Termica.setContext(getActivity());
-    Termica.setActivity(getActivity());
-    int setupResult = Termica.AbreConexaoImpressora(5, "", "", 0);
-    Log.d(TAG, "Setup AbreConexaoImpressora(5): " + setupResult);
-    if (setupResult != 0) {
-      setupResult = Termica.AbreConexaoImpressora(6, "M8", "", 0);
-      Log.d(TAG, "Setup fallback AbreConexaoImpressora(6): " + setupResult);
+    // Se falhar aqui (device sem POS, impressora ocupada no boot), os métodos
+    // de impressão tentam reconectar sob demanda via ensurePrinterConnection().
+    ensurePrinterConnection();
+  }
+
+  /**
+   * Abre a conexão com a térmica interna se ainda não estiver aberta.
+   * Tipo 5 = SmartPOS / impressoras acopladas Android (M10, PosGo);
+   * tipo 6 = MiniPDV M8 (legado), usado como fallback. Nunca lança exceção:
+   * em devices sem o hardware/serviço Elgin apenas retorna false, preservando
+   * o comportamento das versões antigas do plugin (que tentavam conectar a
+   * cada impressão e falhavam de forma recuperável).
+   */
+  private synchronized boolean ensurePrinterConnection() {
+    if (printerReady) return true;
+    try {
+      Termica.setContext(getActivity());
+      Termica.setActivity(getActivity());
+      int setupResult = Termica.AbreConexaoImpressora(5, "", "", 0);
+      Log.d(TAG, "AbreConexaoImpressora(5): " + setupResult);
+      if (setupResult != 0) {
+        setupResult = Termica.AbreConexaoImpressora(6, "M8", "", 0);
+        Log.d(TAG, "Fallback AbreConexaoImpressora(6): " + setupResult);
+      }
+      printerReady = (setupResult == 0);
+    } catch (Throwable t) {
+      Log.e(TAG, "ensurePrinterConnection erro: " + t.getMessage(), t);
+      printerReady = false;
     }
-    printerReady = (setupResult == 0);
     Log.d(TAG, "printerReady: " + printerReady);
+    return printerReady;
   }
 
   @PluginMethod
@@ -77,6 +98,7 @@ public class CapacitorYoogaPosPlugin extends Plugin {
     Integer builderTextZoom = call.getInt("builderTextZoom", 100);
 
     Log.d(TAG, "print() chamado, printerReady=" + printerReady);
+    ensurePrinterConnection();
 
     Html2BitmapConfigurator html2BitmapConfigurator = new Html2BitmapConfigurator() {
       @Override
@@ -115,6 +137,7 @@ public class CapacitorYoogaPosPlugin extends Plugin {
     Integer cutPaperLength = call.getInt("cutPaperLength", 4);
 
     Log.d(TAG, "printText() chamado, printerReady=" + printerReady);
+    ensurePrinterConnection();
 
     int printResult = Termica.ImpressaoTexto(text, 0, 0, 20);
     Log.d(TAG, "ImpressaoTexto: " + printResult);
@@ -137,6 +160,7 @@ public class CapacitorYoogaPosPlugin extends Plugin {
     Integer bitmapWidth = call.getInt("bitmapWidth", 384);
 
     Log.d(TAG, "printPdf() chamado, printerReady=" + printerReady);
+    ensurePrinterConnection();
 
     if (base64 == null || base64.isEmpty()) {
       call.reject("base64 do PDF ausente");
