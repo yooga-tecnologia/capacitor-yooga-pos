@@ -21,6 +21,7 @@ public class PrinterService {
   public PrinterService(Activity activity) {
     this.mActivity = activity;
     Termica.setContext(mActivity);
+    Termica.setActivity(mActivity);
   }
 
   // Construtor sem argumento utilizado apenas para a criação de testes de validaçõ dos parâmetros.
@@ -30,7 +31,15 @@ public class PrinterService {
 
   public int printerInternalImpStart() {
     printerStop();
-    int result = Termica.AbreConexaoImpressora(6, "M8", "", 0);
+
+    // Tipo 5 = SmartPOS / impressoras acopladas Android (M10, PosGo)
+    // Tipo 6 = MiniPDV (M8) — legado, não documentado oficialmente
+    // Tenta tipo 5 primeiro; se falhar, tenta tipo 6 como fallback.
+    int result = Termica.AbreConexaoImpressora(5, "", "", 0);
+
+    if (result != 0) {
+      result = Termica.AbreConexaoImpressora(6, "M8", "", 0);
+    }
 
     if (result == 0) this.isPrinterInternSelected = true;
 
