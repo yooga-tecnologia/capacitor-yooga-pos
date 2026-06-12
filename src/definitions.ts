@@ -44,6 +44,35 @@ export interface PrintOptions {
   builderTextZoom?: number;
 }
 
+export interface PrintTextOptions {
+  /**
+   * Texto a ser impresso.
+   */
+  text: string;
+  /**
+   * Linhas em branco antes do corte (default 4).
+   */
+  cutPaperLength?: number;
+}
+
+export interface PrintPdfOptions {
+  /**
+   * Bytes do PDF em base64 (sem prefixo data:). Cada pagina e rasterizada em
+   * bitmap e impressa na termica interna. Usado para imprimir o DANFE da NFCe,
+   * que so existe em PDF (gerado pelo servico fiscal).
+   */
+  base64: string;
+  /**
+   * Quantidade de linhas em branco a avancar antes do corte (default 4).
+   */
+  cutPaperLength?: number;
+  /**
+   * Largura do bitmap gerado em pixels (default 384, padrao da termica 58mm;
+   * use 576 para 80mm).
+   */
+  bitmapWidth?: number;
+}
+
 export interface CapacitorYoogaPosPlugin {
   /**
    * Mostra a logo padrão da Yooga no display traseiro do terminal
@@ -61,4 +90,16 @@ export interface CapacitorYoogaPosPlugin {
    * terminal Elgin (M8/M10).
    */
   print(options: PrintOptions): Promise<void>;
+
+  /**
+   * Imprime texto simples na impressora térmica interna (sem bitmap).
+   * Útil para testes rápidos de comunicação com a impressora.
+   */
+  printText(options: PrintTextOptions): Promise<void>;
+
+  /**
+   * Rasteriza cada pagina de um PDF (base64) em bitmap e imprime na termica
+   * interna. Pensado para o DANFE da NFCe, que so existe em PDF.
+   */
+  printPdf(options: PrintPdfOptions): Promise<void>;
 }

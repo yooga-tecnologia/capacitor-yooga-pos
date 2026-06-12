@@ -1,6 +1,12 @@
 import { WebPlugin } from '@capacitor/core';
 
-import type { CapacitorYoogaPosPlugin, PrintOptions, ShowPixOptions } from './definitions';
+import type {
+  CapacitorYoogaPosPlugin,
+  PrintOptions,
+  PrintPdfOptions,
+  PrintTextOptions,
+  ShowPixOptions,
+} from './definitions';
 
 /**
  * Stub web — o hardware (display traseiro e impressora térmica) só existe nos
@@ -18,5 +24,13 @@ export class CapacitorYoogaPosWeb extends WebPlugin implements CapacitorYoogaPos
 
   async print(options: PrintOptions): Promise<void> {
     console.log('[CapacitorYoogaPos web stub] print', options);
+  }
+
+  async printText(options: PrintTextOptions): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] printText', options);
+  }
+
+  async printPdf(options: PrintPdfOptions): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] printPdf', options);
   }
 }
