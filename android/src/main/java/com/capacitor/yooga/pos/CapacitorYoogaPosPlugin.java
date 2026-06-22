@@ -200,8 +200,19 @@ public class CapacitorYoogaPosPlugin extends Plugin {
         page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT);
         page.close();
 
-        int printResult = Termica.ImprimeBitmap(bitmap);
-        Log.d(TAG, "ImprimeBitmap pagina " + i + ": " + printResult);
+        // O DANFE da NFCe vem com um vao em branco gigante no rodape (a pagina
+        // do PDF e bem mais alta que o conteudo). Aparamos esse branco para
+        // nao desperdicar bobina nem deixar um espaco vazio antes do corte.
+        Bitmap toPrint = trimBottomWhitespace(bitmap);
+
+        int printResult = Termica.ImprimeBitmap(toPrint);
+        Log.d(TAG, "ImprimeBitmap pagina " + i + ": " + printResult
+          + " | alturaOriginal=" + bitmap.getHeight()
+          + " alturaImpressa=" + toPrint.getHeight());
+
+        if (toPrint != bitmap) {
+          toPrint.recycle();
+        }
         bitmap.recycle();
       }
 
@@ -223,6 +234,61 @@ public class CapacitorYoogaPosPlugin extends Plugin {
         tempFile.delete();
       }
     }
+  }
+
+  /**
+   * Recorta o espaco em branco no rodape de um bitmap rasterizado. Varre as
+   * linhas de baixo para cima ate achar a primeira com pixel "escuro" (fora do
+   * limiar de branco) e devolve um bitmap cortado nessa altura + uma pequena
+   * folga. Se a pagina for toda branca, devolve o bitmap original sem alterar.
+   */
+  private Bitmap trimBottomWhitespace(Bitmap src) {
+    if (src == null) {
+      return null;
+    }
+    final int width = src.getWidth();
+    final int height = src.getHeight();
+    if (width <= 0 || height <= 0) {
+      return src;
+    }
+
+    // Limiar: pixels com qualquer canal abaixo disso contam como conteudo.
+    final int threshold = 245;
+    final int[] row = new int[width];
+    int lastContentRow = -1;
+
+    for (int y = height - 1; y >= 0; y--) {
+      src.getPixels(row, 0, width, 0, y, width, 1);
+      boolean hasContent = false;
+      for (int x = 0; x < width; x++) {
+        final int c = row[x];
+        final int r = (c >> 16) & 0xFF;
+        final int g = (c >> 8) & 0xFF;
+        final int b = c & 0xFF;
+        if (r < threshold || g < threshold || b < threshold) {
+          hasContent = true;
+          break;
+        }
+      }
+      if (hasContent) {
+        lastContentRow = y;
+        break;
+      }
+    }
+
+    // Tudo branco -> nao mexe (evita bitmap de altura 0).
+    if (lastContentRow < 0) {
+      return src;
+    }
+
+    // Pequena folga proporcional a largura para nao "colar" no corte.
+    final int margin = Math.round(width * 0.03f);
+    final int newHeight = Math.min(height, lastContentRow + 1 + margin);
+    if (newHeight >= height) {
+      return src;
+    }
+
+    return Bitmap.createBitmap(src, 0, 0, width, newHeight);
   }
 
   /**
