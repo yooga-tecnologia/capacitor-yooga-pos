@@ -170,6 +170,10 @@ public class CapacitorYoogaPosPlugin extends Plugin {
     File tempFile = null;
     ParcelFileDescriptor pfd = null;
     PdfRenderer renderer = null;
+    // Controla o corte no finally: so cortamos se ao menos uma pagina foi
+    // impressa, garantindo o destaque do papel mesmo se uma pagina seguinte
+    // lancar excecao no meio da impressao.
+    boolean anyPagePrinted = false;
     try {
       byte[] pdfBytes = Base64.decode(base64, Base64.DEFAULT);
       tempFile = File.createTempFile("danfe", ".pdf", getContext().getCacheDir());
@@ -206,6 +210,7 @@ public class CapacitorYoogaPosPlugin extends Plugin {
         Bitmap toPrint = trimBottomWhitespace(bitmap);
 
         int printResult = Termica.ImprimeBitmap(toPrint);
+        anyPagePrinted = true;
         Log.d(TAG, "ImprimeBitmap pagina " + i + ": " + printResult
           + " | alturaOriginal=" + bitmap.getHeight()
           + " alturaImpressa=" + toPrint.getHeight());
@@ -216,14 +221,23 @@ public class CapacitorYoogaPosPlugin extends Plugin {
         bitmap.recycle();
       }
 
-      int cutResult = Termica.Corte(cutPaperLength);
-      Log.d(TAG, "Corte: " + cutResult);
-
       call.resolve();
     } catch (Exception e) {
       Log.e(TAG, "printPdf erro: " + e.getMessage(), e);
       call.reject("Erro ao rasterizar/imprimir PDF: " + e.getMessage());
     } finally {
+      // Corte no finally: garante o destaque do papel mesmo apos impressao
+      // parcial (ex.: excecao numa pagina do meio). So corta se algo foi
+      // impresso, para nao avancar/cortar bobina em branco quando falhou antes
+      // de imprimir qualquer pagina.
+      if (anyPagePrinted) {
+        try {
+          int cutResult = Termica.Corte(cutPaperLength);
+          Log.d(TAG, "Corte: " + cutResult);
+        } catch (Exception ex) {
+          Log.e(TAG, "Corte falhou: " + ex.getMessage(), ex);
+        }
+      }
       if (renderer != null) {
         try { renderer.close(); } catch (Exception ignored) {}
       }
