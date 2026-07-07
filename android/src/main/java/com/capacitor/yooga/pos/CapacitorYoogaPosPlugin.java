@@ -31,13 +31,33 @@ import java.io.FileOutputStream;
 
 @CapacitorPlugin(
   name = "CapacitorYoogaPos",
-  permissions = @Permission(alias = "bluetooth", strings = { "android.permission.BLUETOOTH_CONNECT" })
+  permissions = {
+    @Permission(alias = "bluetooth", strings = { "android.permission.BLUETOOTH_CONNECT" }),
+    @Permission(alias = "bluetoothScan", strings = { "android.permission.BLUETOOTH_SCAN" }),
+    @Permission(alias = "location", strings = { "android.permission.ACCESS_FINE_LOCATION" })
+  }
 )
 public class CapacitorYoogaPosPlugin extends Plugin {
 
   private static final String TAG = "CapacitorYoogaPos";
   private boolean printerReady = false;
   private final BluetoothEscPosService bluetoothService = new BluetoothEscPosService();
+  private com.capacitor.yooga.pos.bluetooth.BluetoothDiscoveryService discoveryService;
+
+  private com.capacitor.yooga.pos.bluetooth.BluetoothDiscoveryService discoveryService() {
+    if (discoveryService == null) {
+      discoveryService = new com.capacitor.yooga.pos.bluetooth.BluetoothDiscoveryService(getContext());
+    }
+    return discoveryService;
+  }
+
+  @Override
+  protected void handleOnDestroy() {
+    if (discoveryService != null) {
+      discoveryService.cleanup();
+    }
+    super.handleOnDestroy();
+  }
 
   @Override
   public void load() {
@@ -471,6 +491,75 @@ public class CapacitorYoogaPosPlugin extends Plugin {
   }
 
   /**
+   * Busca devices Bluetooth por perto (discovery clássico, ~12s). Devices vão
+   * chegando via evento `bluetoothDeviceFound`; o fim da busca dispara
+   * `bluetoothDiscoveryFinished`. A UI monta a lista ao vivo.
+   */
+  @PluginMethod
+  public void startBluetoothDiscovery(PluginCall call) {
+    if (needsDiscoveryPermission(call)) return;
+    try {
+      discoveryService().startDiscovery(new com.capacitor.yooga.pos.bluetooth.BluetoothDiscoveryService.DiscoveryListener() {
+        @Override
+        public void onDeviceFound(String name, String address, boolean isPrinter, boolean bonded) {
+          JSObject device = new JSObject();
+          device.put("name", name);
+          device.put("address", address);
+          device.put("isPrinter", isPrinter);
+          device.put("bonded", bonded);
+          notifyListeners("bluetoothDeviceFound", device);
+        }
+
+        @Override
+        public void onDiscoveryFinished() {
+          notifyListeners("bluetoothDiscoveryFinished", new JSObject());
+        }
+      });
+      call.resolve();
+    } catch (Exception e) {
+      Log.e(TAG, "startBluetoothDiscovery erro: " + e.getMessage(), e);
+      call.reject(e.getMessage());
+    }
+  }
+
+  @PluginMethod
+  public void stopBluetoothDiscovery(PluginCall call) {
+    discoveryService().stopDiscovery();
+    call.resolve();
+  }
+
+  /**
+   * Pareia com o device (createBond): o Android mostra o diálogo de PIN do
+   * sistema na hora. Resolve quando o bond completa; rejeita se o usuário
+   * recusar ou o PIN falhar. Já pareado resolve imediato.
+   */
+  @PluginMethod
+  public void pairBluetoothDevice(PluginCall call) {
+    if (needsBluetoothPermission(call)) return;
+    String address = call.getString("address");
+    if (address == null || address.isEmpty()) {
+      call.reject("address é obrigatório");
+      return;
+    }
+    try {
+      discoveryService().pair(address, new com.capacitor.yooga.pos.bluetooth.BluetoothDiscoveryService.PairingListener() {
+        @Override
+        public void onPaired() {
+          call.resolve();
+        }
+
+        @Override
+        public void onPairingFailed(String reason) {
+          call.reject(reason);
+        }
+      });
+    } catch (Exception e) {
+      Log.e(TAG, "pairBluetoothDevice erro: " + e.getMessage(), e);
+      call.reject(e.getMessage());
+    }
+  }
+
+  /**
    * BLUETOOTH_CONNECT só é permissão de runtime a partir do Android 12 (API 31);
    * antes disso o BLUETOOTH do manifest basta. Retorna true se a call ficou
    * pendente aguardando o prompt de permissão (o método deve retornar sem fazer nada).
@@ -482,9 +571,41 @@ public class CapacitorYoogaPosPlugin extends Plugin {
     return true;
   }
 
+  /**
+   * Permissões do discovery mudaram no Android 12: antes (<= API 30) a busca
+   * exige localização (ACCESS_FINE_LOCATION, runtime) — herança do BLE scan;
+   * do 12 em diante são BLUETOOTH_SCAN + BLUETOOTH_CONNECT (o CONNECT é para
+   * ler nome/bond dos devices achados).
+   */
+  private boolean needsDiscoveryPermission(PluginCall call) {
+    if (android.os.Build.VERSION.SDK_INT >= 31) {
+      boolean scanOk = getPermissionState("bluetoothScan") == PermissionState.GRANTED;
+      boolean connectOk = getPermissionState("bluetooth") == PermissionState.GRANTED;
+      if (scanOk && connectOk) return false;
+      requestPermissionForAliases(
+        new String[] { "bluetoothScan", "bluetooth" },
+        call,
+        "bluetoothPermissionCallback"
+      );
+      return true;
+    }
+    if (getPermissionState("location") == PermissionState.GRANTED) return false;
+    requestPermissionForAlias("location", call, "bluetoothPermissionCallback");
+    return true;
+  }
+
   @PermissionCallback
   private void bluetoothPermissionCallback(PluginCall call) {
-    if (getPermissionState("bluetooth") != PermissionState.GRANTED) {
+    boolean granted;
+    if ("startBluetoothDiscovery".equals(call.getMethodName())) {
+      granted = android.os.Build.VERSION.SDK_INT >= 31
+        ? getPermissionState("bluetoothScan") == PermissionState.GRANTED &&
+          getPermissionState("bluetooth") == PermissionState.GRANTED
+        : getPermissionState("location") == PermissionState.GRANTED;
+    } else {
+      granted = getPermissionState("bluetooth") == PermissionState.GRANTED;
+    }
+    if (!granted) {
       call.reject("Permissão Bluetooth negada");
       return;
     }
@@ -500,6 +621,12 @@ public class CapacitorYoogaPosPlugin extends Plugin {
         break;
       case "printBluetoothText":
         printBluetoothText(call);
+        break;
+      case "startBluetoothDiscovery":
+        startBluetoothDiscovery(call);
+        break;
+      case "pairBluetoothDevice":
+        pairBluetoothDevice(call);
         break;
       default:
         call.reject("Método desconhecido após permissão: " + call.getMethodName());

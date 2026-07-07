@@ -54,4 +54,17 @@ export class CapacitorYoogaPosWeb extends WebPlugin implements CapacitorYoogaPos
   async printBluetoothText(options: PrintBluetoothTextOptions): Promise<void> {
     console.log('[CapacitorYoogaPos web stub] printBluetoothText', options);
   }
+
+  async startBluetoothDiscovery(): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] startBluetoothDiscovery()');
+    this.notifyListeners('bluetoothDiscoveryFinished', {});
+  }
+
+  async stopBluetoothDiscovery(): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] stopBluetoothDiscovery()');
+  }
+
+  async pairBluetoothDevice(options: { address: string }): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] pairBluetoothDevice', options);
+  }
 }

@@ -73,6 +73,30 @@ export interface PrintPdfOptions {
   bitmapWidth?: number;
 }
 
+import type { PluginListenerHandle } from '@capacitor/core';
+
+export interface DiscoveredBluetoothDevice {
+  /**
+   * Nome anunciado pelo device (ou o MAC quando o nome ainda não chegou —
+   * alguns clones só expõem o nome numa segunda passada do discovery).
+   */
+  name: string;
+  /**
+   * Endereço MAC.
+   */
+  address: string;
+  /**
+   * True quando a classe Bluetooth do device é IMAGING (impressoras "de
+   * verdade"). Clones baratos às vezes reportam classe genérica — use como
+   * dica de ordenação, não como filtro.
+   */
+  isPrinter: boolean;
+  /**
+   * True se já está pareado com este aparelho.
+   */
+  bonded: boolean;
+}
+
 export interface BluetoothDeviceInfo {
   /**
    * Nome do device pareado (ou o MAC, se o nome não estiver disponível).
@@ -211,4 +235,36 @@ export interface CapacitorYoogaPosPlugin {
    * Teste rápido de comunicação com a térmica Bluetooth (texto ASCII puro).
    */
   printBluetoothText(options: PrintBluetoothTextOptions): Promise<void>;
+
+  /**
+   * Inicia o discovery clássico (~12s, encerrado pelo sistema). Devices
+   * chegam via evento `bluetoothDeviceFound`; o término dispara
+   * `bluetoothDiscoveryFinished`. No Android 12+ pede BLUETOOTH_SCAN+CONNECT;
+   * no 11- pede localização (exigência do SO para discovery).
+   */
+  startBluetoothDiscovery(): Promise<void>;
+
+  /**
+   * Cancela um discovery em andamento (ex.: usuário fechou o modal de busca).
+   */
+  stopBluetoothDiscovery(): Promise<void>;
+
+  /**
+   * Pareia com o device: o Android mostra o diálogo de PIN do sistema.
+   * Resolve quando o bond completa; rejeita em recusa/PIN errado. Já pareado
+   * resolve imediato.
+   */
+  pairBluetoothDevice(options: { address: string }): Promise<void>;
+
+  addListener(
+    eventName: 'bluetoothDeviceFound',
+    listenerFunc: (device: DiscoveredBluetoothDevice) => void,
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'bluetoothDiscoveryFinished',
+    listenerFunc: () => void,
+  ): Promise<PluginListenerHandle>;
+
+  removeAllListeners(): Promise<void>;
 }

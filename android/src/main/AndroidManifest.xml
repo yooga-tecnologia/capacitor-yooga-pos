@@ -1,10 +1,23 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- Impressão em térmicas Bluetooth genéricas (SPP/RFCOMM), ex. MTP-II.
-         Até o Android 11 (API 30) BLUETOOTH é permissão de install-time;
-         do 12 em diante vale só o BLUETOOTH_CONNECT (runtime). Não usamos
-         scan/discovery (só devices pareados), então BLUETOOTH_SCAN não entra. -->
+         Até o Android 11 (API 30): BLUETOOTH/BLUETOOTH_ADMIN são install-time e
+         o discovery exige ACCESS_FINE_LOCATION (runtime). Do 12 em diante:
+         BLUETOOTH_CONNECT para conectar/parear e BLUETOOTH_SCAN para a busca —
+         com neverForLocation, que dispensa localização (não inferimos posição
+         a partir do scan). -->
     <uses-permission
         android:name="android.permission.BLUETOOTH"
         android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="s" />
 </manifest>
