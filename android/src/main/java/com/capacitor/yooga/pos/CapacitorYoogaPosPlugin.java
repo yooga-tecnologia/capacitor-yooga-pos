@@ -368,6 +368,87 @@ public class CapacitorYoogaPosPlugin extends Plugin {
   }
 
   /**
+   * Rasteriza cada página de um PDF (base64) e imprime na térmica Bluetooth
+   * numa única conexão. Mesmo pipeline do printPdf interno (fundo branco +
+   * apara do rodapé), trocando só o destino. Usado para o DANFE da NFC-e.
+   */
+  @PluginMethod
+  public void printPdfBluetooth(PluginCall call) {
+    if (needsBluetoothPermission(call)) return;
+    String address = call.getString("address");
+    if (address == null || address.isEmpty()) {
+      call.reject("address (MAC do device pareado) é obrigatório");
+      return;
+    }
+    String base64 = call.getString("base64");
+    if (base64 == null || base64.isEmpty()) {
+      call.reject("base64 do PDF ausente");
+      return;
+    }
+    Integer bitmapWidth = call.getInt("bitmapWidth", 384);
+    Integer feedLines = call.getInt("feedLines", 4);
+    Integer heatTime = call.getInt("heatTime", 140);
+    Integer luminanceThreshold = call.getInt("luminanceThreshold", 200);
+
+    java.util.List<Bitmap> pages = new java.util.ArrayList<>();
+    File tempFile = null;
+    ParcelFileDescriptor pfd = null;
+    PdfRenderer renderer = null;
+    try {
+      byte[] pdfBytes = Base64.decode(base64, Base64.DEFAULT);
+      tempFile = File.createTempFile("danfe-bt", ".pdf", getContext().getCacheDir());
+      try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+        fos.write(pdfBytes);
+      }
+      pfd = ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY);
+      renderer = new PdfRenderer(pfd);
+
+      int pageCount = renderer.getPageCount();
+      Log.d(TAG, "printPdfBluetooth paginas: " + pageCount);
+      for (int i = 0; i < pageCount; i++) {
+        PdfRenderer.Page page = renderer.openPage(i);
+        int targetWidth = bitmapWidth;
+        int targetHeight = Math.max(
+          1,
+          Math.round(page.getHeight() * ((float) targetWidth / page.getWidth()))
+        );
+        Bitmap bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        // Fundo branco obrigatorio: o PdfRenderer mantem areas transparentes,
+        // que na termica saem como mancha preta.
+        canvas.drawColor(Color.WHITE);
+        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT);
+        page.close();
+
+        Bitmap toPrint = trimBottomWhitespace(bitmap);
+        if (toPrint != bitmap) {
+          bitmap.recycle();
+        }
+        pages.add(toPrint);
+      }
+
+      bluetoothService.printBitmaps(address, pages, feedLines, heatTime, luminanceThreshold);
+      call.resolve();
+    } catch (Exception e) {
+      Log.e(TAG, "printPdfBluetooth erro: " + e.getMessage(), e);
+      call.reject("Erro na impressão Bluetooth do PDF: " + e.getMessage());
+    } finally {
+      for (Bitmap page : pages) {
+        page.recycle();
+      }
+      if (renderer != null) {
+        try { renderer.close(); } catch (Exception ignored) {}
+      }
+      if (pfd != null) {
+        try { pfd.close(); } catch (Exception ignored) {}
+      }
+      if (tempFile != null) {
+        tempFile.delete();
+      }
+    }
+  }
+
+  /**
    * Teste rápido de comunicação com a térmica Bluetooth (texto ASCII, sem bitmap).
    */
   @PluginMethod
@@ -413,6 +494,9 @@ public class CapacitorYoogaPosPlugin extends Plugin {
         break;
       case "printBluetooth":
         printBluetooth(call);
+        break;
+      case "printPdfBluetooth":
+        printPdfBluetooth(call);
         break;
       case "printBluetoothText":
         printBluetoothText(call);

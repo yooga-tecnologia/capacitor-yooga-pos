@@ -74,8 +74,35 @@ public class BluetoothEscPosService {
   @SuppressLint("MissingPermission")
   public void printBitmap(String address, Bitmap bitmap, int feedLines, int heatTime, int luminanceThreshold)
     throws IOException {
-    if (bitmap == null) {
-      throw new IOException("Bitmap nulo — falha ao renderizar o conteúdo");
+    printBitmaps(address, java.util.Collections.singletonList(bitmap), feedLines, heatTime, luminanceThreshold);
+  }
+
+  /** Overload com os defaults de densidade/limiar. */
+  @SuppressLint("MissingPermission")
+  public void printBitmap(String address, Bitmap bitmap, int feedLines) throws IOException {
+    printBitmap(address, bitmap, feedLines, DEFAULT_HEAT_TIME, DEFAULT_LUMINANCE_THRESHOLD);
+  }
+
+  /**
+   * Imprime uma sequência de bitmaps (ex.: páginas de um PDF rasterizado) numa
+   * única conexão — conectar por página deixaria a impressora dormir no meio.
+   * O avanço de {@code feedLines} sai uma vez só, no final do último bitmap.
+   */
+  @SuppressLint("MissingPermission")
+  public void printBitmaps(
+    String address,
+    java.util.List<Bitmap> bitmaps,
+    int feedLines,
+    int heatTime,
+    int luminanceThreshold
+  ) throws IOException {
+    if (bitmaps == null || bitmaps.isEmpty()) {
+      throw new IOException("Nenhum bitmap para imprimir");
+    }
+    for (Bitmap bitmap : bitmaps) {
+      if (bitmap == null) {
+        throw new IOException("Bitmap nulo — falha ao renderizar o conteúdo");
+      }
     }
     BluetoothSocket socket = connect(address);
     try {
@@ -88,19 +115,17 @@ public class BluetoothEscPosService {
         // costumam ignorar. n1=11 (96 pontos) equilibra escuridão x consumo.
         out.write(new byte[] { 0x1B, 0x37, 11, (byte) Math.min(255, heatTime), 4 });
       }
-      writeRaster(out, bitmap, luminanceThreshold);
+      int totalHeight = 0;
+      for (Bitmap bitmap : bitmaps) {
+        writeRaster(out, bitmap, luminanceThreshold);
+        totalHeight += bitmap.getHeight();
+      }
       out.write(new byte[] { 0x1B, 0x64, (byte) Math.max(0, feedLines) }); // ESC d n (avanço)
       out.flush();
-      drainDelay(bitmap.getHeight());
+      drainDelay(totalHeight);
     } finally {
       closeQuietly(socket);
     }
-  }
-
-  /** Overload com os defaults de densidade/limiar. */
-  @SuppressLint("MissingPermission")
-  public void printBitmap(String address, Bitmap bitmap, int feedLines) throws IOException {
-    printBitmap(address, bitmap, feedLines, DEFAULT_HEAT_TIME, DEFAULT_LUMINANCE_THRESHOLD);
   }
 
   /**

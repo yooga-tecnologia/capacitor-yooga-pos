@@ -112,6 +112,35 @@ export interface PrintBluetoothOptions extends PrintOptions {
   luminanceThreshold?: number;
 }
 
+export interface PrintPdfBluetoothOptions {
+  /**
+   * MAC da impressora Bluetooth já pareada no Android.
+   */
+  address: string;
+  /**
+   * Bytes do PDF em base64 (sem prefixo data:). Cada página é rasterizada e
+   * enviada como raster ESC/POS numa única conexão. Usado para o DANFE da
+   * NFC-e (gerar com lp=40&quebraQr=true no serviço fiscal para 58mm).
+   */
+  base64: string;
+  /**
+   * Largura do bitmap em pixels (default 384 = 58mm; 576 = 80mm).
+   */
+  bitmapWidth?: number;
+  /**
+   * Linhas em branco a avançar no final do documento (default 4).
+   */
+  feedLines?: number;
+  /**
+   * Heat time do ESC 7 em unidades de 10us (default 140; 0 desliga).
+   */
+  heatTime?: number;
+  /**
+   * Limiar de luminância 0-255 do raster (default 200).
+   */
+  luminanceThreshold?: number;
+}
+
 export interface PrintBluetoothTextOptions {
   /**
    * MAC da impressora Bluetooth já pareada no Android.
@@ -171,6 +200,12 @@ export interface CapacitorYoogaPosPlugin {
    * (ex.: MTP-II 58mm — bitmapWidth 384, o default).
    */
   printBluetooth(options: PrintBluetoothOptions): Promise<void>;
+
+  /**
+   * Rasteriza cada página de um PDF (base64) e envia como raster ESC/POS para
+   * a térmica Bluetooth numa única conexão. Pensado para o DANFE da NFC-e.
+   */
+  printPdfBluetooth(options: PrintPdfBluetoothOptions): Promise<void>;
 
   /**
    * Teste rápido de comunicação com a térmica Bluetooth (texto ASCII puro).

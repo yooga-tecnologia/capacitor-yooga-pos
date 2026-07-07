@@ -5,6 +5,7 @@ import type {
   ListBluetoothDevicesResult,
   PrintBluetoothOptions,
   PrintBluetoothTextOptions,
+  PrintPdfBluetoothOptions,
   PrintOptions,
   PrintPdfOptions,
   PrintTextOptions,
@@ -44,6 +45,10 @@ export class CapacitorYoogaPosWeb extends WebPlugin implements CapacitorYoogaPos
 
   async printBluetooth(options: PrintBluetoothOptions): Promise<void> {
     console.log('[CapacitorYoogaPos web stub] printBluetooth', options);
+  }
+
+  async printPdfBluetooth(options: PrintPdfBluetoothOptions): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] printPdfBluetooth', options);
   }
 
   async printBluetoothText(options: PrintBluetoothTextOptions): Promise<void> {
