@@ -108,8 +108,14 @@ public class BluetoothEscPosService {
     BluetoothAdapter adapter = requireAdapter();
     BluetoothDevice device = adapter.getRemoteDevice(address);
     // Discovery ativo degrada muito a conexão RFCOMM; cancelar é recomendação
-    // oficial da doc do BluetoothSocket.
-    adapter.cancelDiscovery();
+    // oficial da doc do BluetoothSocket. Best-effort: no Android 12+ o
+    // cancelDiscovery exige BLUETOOTH_SCAN, que não pedimos (não fazemos scan) —
+    // se negar, seguimos direto pra conexão.
+    try {
+      adapter.cancelDiscovery();
+    } catch (SecurityException e) {
+      Log.w(TAG, "cancelDiscovery sem permissão BLUETOOTH_SCAN, ignorando: " + e.getMessage());
+    }
 
     BluetoothSocket socket = device.createRfcommSocketToServiceRecord(SPP_UUID);
     try {
