@@ -2,6 +2,9 @@ import { WebPlugin } from '@capacitor/core';
 
 import type {
   CapacitorYoogaPosPlugin,
+  ListBluetoothDevicesResult,
+  PrintBluetoothOptions,
+  PrintBluetoothTextOptions,
   PrintOptions,
   PrintPdfOptions,
   PrintTextOptions,
@@ -32,5 +35,18 @@ export class CapacitorYoogaPosWeb extends WebPlugin implements CapacitorYoogaPos
 
   async printPdf(options: PrintPdfOptions): Promise<void> {
     console.log('[CapacitorYoogaPos web stub] printPdf', options);
+  }
+
+  async listBluetoothDevices(): Promise<ListBluetoothDevicesResult> {
+    console.log('[CapacitorYoogaPos web stub] listBluetoothDevices()');
+    return { devices: [] };
+  }
+
+  async printBluetooth(options: PrintBluetoothOptions): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] printBluetooth', options);
+  }
+
+  async printBluetoothText(options: PrintBluetoothTextOptions): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] printBluetoothText', options);
   }
 }

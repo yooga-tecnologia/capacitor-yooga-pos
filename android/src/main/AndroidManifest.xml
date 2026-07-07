@@ -1,2 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Impressão em térmicas Bluetooth genéricas (SPP/RFCOMM), ex. MTP-II.
+         Até o Android 11 (API 30) BLUETOOTH é permissão de install-time;
+         do 12 em diante vale só o BLUETOOTH_CONNECT (runtime). Não usamos
+         scan/discovery (só devices pareados), então BLUETOOTH_SCAN não entra. -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 </manifest>

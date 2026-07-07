@@ -73,6 +73,49 @@ export interface PrintPdfOptions {
   bitmapWidth?: number;
 }
 
+export interface BluetoothDeviceInfo {
+  /**
+   * Nome do device pareado (ou o MAC, se o nome não estiver disponível).
+   */
+  name: string;
+  /**
+   * Endereço MAC do device (usado como `address` nos métodos de impressão BT).
+   */
+  address: string;
+}
+
+export interface ListBluetoothDevicesResult {
+  devices: BluetoothDeviceInfo[];
+}
+
+export interface PrintBluetoothOptions extends PrintOptions {
+  /**
+   * MAC da impressora Bluetooth já pareada no Android (ver listBluetoothDevices).
+   */
+  address: string;
+  /**
+   * Linhas em branco a avançar no final (default 4). Térmicas portáteis como a
+   * MTP-II não têm guilhotina, então o avanço substitui o corte.
+   */
+  feedLines?: number;
+}
+
+export interface PrintBluetoothTextOptions {
+  /**
+   * MAC da impressora Bluetooth já pareada no Android.
+   */
+  address: string;
+  /**
+   * Texto ASCII de teste (acentuação depende do codepage do firmware; não usar
+   * para recibos reais — prefira printBluetooth, que envia bitmap).
+   */
+  text?: string;
+  /**
+   * Linhas em branco a avançar no final (default 4).
+   */
+  feedLines?: number;
+}
+
 export interface CapacitorYoogaPosPlugin {
   /**
    * Mostra a logo padrão da Yooga no display traseiro do terminal
@@ -102,4 +145,23 @@ export interface CapacitorYoogaPosPlugin {
    * interna. Pensado para o DANFE da NFCe, que so existe em PDF.
    */
   printPdf(options: PrintPdfOptions): Promise<void>;
+
+  /**
+   * Lista os devices Bluetooth já pareados no Android (o pareamento é feito nas
+   * configurações do sistema). No Android 12+ dispara o prompt de permissão
+   * BLUETOOTH_CONNECT na primeira chamada.
+   */
+  listBluetoothDevices(): Promise<ListBluetoothDevicesResult>;
+
+  /**
+   * Renderiza o HTML em bitmap (mesmo pipeline do print interno) e envia como
+   * raster ESC/POS para uma térmica Bluetooth genérica via SPP/RFCOMM
+   * (ex.: MTP-II 58mm — bitmapWidth 384, o default).
+   */
+  printBluetooth(options: PrintBluetoothOptions): Promise<void>;
+
+  /**
+   * Teste rápido de comunicação com a térmica Bluetooth (texto ASCII puro).
+   */
+  printBluetoothText(options: PrintBluetoothTextOptions): Promise<void>;
 }

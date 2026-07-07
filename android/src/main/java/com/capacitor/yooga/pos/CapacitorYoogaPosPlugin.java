@@ -9,12 +9,18 @@ import android.util.Base64;
 import android.util.Log;
 import android.webkit.WebView;
 
+import com.capacitor.yooga.pos.bluetooth.BluetoothEscPosService;
 import com.capacitor.yooga.pos.elgin.Services.Pix4.Pix4Service;
 import com.elgin.e1.Impressora.Termica;
+import com.getcapacitor.JSArray;
+import com.getcapacitor.JSObject;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 import com.izettle.html2bitmap.Html2Bitmap;
 import com.izettle.html2bitmap.Html2BitmapConfigurator;
 import com.izettle.html2bitmap.content.WebViewContent;
@@ -23,11 +29,15 @@ import java.io.File;
 import java.io.FileOutputStream;
 
 
-@CapacitorPlugin(name = "CapacitorYoogaPos")
+@CapacitorPlugin(
+  name = "CapacitorYoogaPos",
+  permissions = @Permission(alias = "bluetooth", strings = { "android.permission.BLUETOOTH_CONNECT" })
+)
 public class CapacitorYoogaPosPlugin extends Plugin {
 
   private static final String TAG = "CapacitorYoogaPos";
   private boolean printerReady = false;
+  private final BluetoothEscPosService bluetoothService = new BluetoothEscPosService();
 
   @Override
   public void load() {
@@ -303,6 +313,144 @@ public class CapacitorYoogaPosPlugin extends Plugin {
     }
 
     return Bitmap.createBitmap(src, 0, 0, width, newHeight);
+  }
+
+  /**
+   * Lista os devices Bluetooth já pareados no Android. O pareamento é feito nas
+   * configurações do sistema; o app só escolhe entre os pareados.
+   */
+  @PluginMethod
+  public void listBluetoothDevices(PluginCall call) {
+    if (needsBluetoothPermission(call)) return;
+    try {
+      JSArray devices = new JSArray();
+      for (BluetoothEscPosService.BondedDevice device : bluetoothService.listBondedDevices()) {
+        JSObject item = new JSObject();
+        item.put("name", device.name);
+        item.put("address", device.address);
+        devices.put(item);
+      }
+      JSObject result = new JSObject();
+      result.put("devices", devices);
+      call.resolve(result);
+    } catch (Exception e) {
+      Log.e(TAG, "listBluetoothDevices erro: " + e.getMessage(), e);
+      call.reject(e.getMessage());
+    }
+  }
+
+  /**
+   * Renderiza o HTML em bitmap (mesmo pipeline do print interno) e envia como
+   * raster ESC/POS para uma térmica Bluetooth genérica (ex.: MTP-II 58mm).
+   */
+  @PluginMethod
+  public void printBluetooth(PluginCall call) {
+    if (needsBluetoothPermission(call)) return;
+    String address = call.getString("address");
+    if (address == null || address.isEmpty()) {
+      call.reject("address (MAC do device pareado) é obrigatório");
+      return;
+    }
+    Integer feedLines = call.getInt("feedLines", 4);
+    try {
+      Bitmap bitmap = renderHtmlToBitmap(call);
+      Log.d(TAG, "printBluetooth bitmap: " + (bitmap != null ? bitmap.getWidth() + "x" + bitmap.getHeight() : "NULL"));
+      bluetoothService.printBitmap(address, bitmap, feedLines);
+      call.resolve();
+    } catch (Exception e) {
+      Log.e(TAG, "printBluetooth erro: " + e.getMessage(), e);
+      call.reject("Erro na impressão Bluetooth: " + e.getMessage());
+    }
+  }
+
+  /**
+   * Teste rápido de comunicação com a térmica Bluetooth (texto ASCII, sem bitmap).
+   */
+  @PluginMethod
+  public void printBluetoothText(PluginCall call) {
+    if (needsBluetoothPermission(call)) return;
+    String address = call.getString("address");
+    if (address == null || address.isEmpty()) {
+      call.reject("address (MAC do device pareado) é obrigatório");
+      return;
+    }
+    String text = call.getString("text", "TESTE YOOGA BT\n");
+    Integer feedLines = call.getInt("feedLines", 4);
+    try {
+      bluetoothService.printText(address, text, feedLines);
+      call.resolve();
+    } catch (Exception e) {
+      Log.e(TAG, "printBluetoothText erro: " + e.getMessage(), e);
+      call.reject("Erro na impressão Bluetooth: " + e.getMessage());
+    }
+  }
+
+  /**
+   * BLUETOOTH_CONNECT só é permissão de runtime a partir do Android 12 (API 31);
+   * antes disso o BLUETOOTH do manifest basta. Retorna true se a call ficou
+   * pendente aguardando o prompt de permissão (o método deve retornar sem fazer nada).
+   */
+  private boolean needsBluetoothPermission(PluginCall call) {
+    if (android.os.Build.VERSION.SDK_INT < 31) return false;
+    if (getPermissionState("bluetooth") == PermissionState.GRANTED) return false;
+    requestPermissionForAlias("bluetooth", call, "bluetoothPermissionCallback");
+    return true;
+  }
+
+  @PermissionCallback
+  private void bluetoothPermissionCallback(PluginCall call) {
+    if (getPermissionState("bluetooth") != PermissionState.GRANTED) {
+      call.reject("Permissão Bluetooth negada");
+      return;
+    }
+    switch (call.getMethodName()) {
+      case "listBluetoothDevices":
+        listBluetoothDevices(call);
+        break;
+      case "printBluetooth":
+        printBluetooth(call);
+        break;
+      case "printBluetoothText":
+        printBluetoothText(call);
+        break;
+      default:
+        call.reject("Método desconhecido após permissão: " + call.getMethodName());
+    }
+  }
+
+  /**
+   * Mesmo pipeline HTML -> bitmap do print() da térmica interna, lendo as
+   * mesmas opções da call (bitmapWidth 384 = 58mm, 576 = 80mm).
+   */
+  private Bitmap renderHtmlToBitmap(PluginCall call) {
+    String html = call.getString("html");
+    Integer webViewZoom = call.getInt("webViewZoom", 100);
+    Integer bitmapWidth = call.getInt("bitmapWidth", 384);
+    Integer measureDelay = call.getInt("measureDelay", 0);
+    Integer screenshotDelay = call.getInt("screenshotDelay", 0);
+    Boolean strictMode = call.getBoolean("strictMode", false);
+    Integer timeout = call.getInt("timeout", 30000);
+    Integer builderTextZoom = call.getInt("builderTextZoom", 100);
+
+    Html2BitmapConfigurator configurator = new Html2BitmapConfigurator() {
+      @Override
+      public void configureWebView(WebView webview) {
+        webview.getSettings().setTextZoom(webViewZoom);
+      }
+    };
+
+    return new Html2Bitmap.Builder()
+      .setContext(getContext())
+      .setContent(WebViewContent.html(html))
+      .setBitmapWidth(bitmapWidth)
+      .setMeasureDelay(measureDelay)
+      .setScreenshotDelay(screenshotDelay)
+      .setStrictMode(strictMode)
+      .setTimeout(timeout)
+      .setTextZoom(builderTextZoom)
+      .setConfigurator(configurator)
+      .build()
+      .getBitmap();
   }
 
   /**
