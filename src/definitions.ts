@@ -98,6 +98,18 @@ export interface PrintBluetoothOptions extends PrintOptions {
    * MTP-II não têm guilhotina, então o avanço substitui o corte.
    */
   feedLines?: number;
+  /**
+   * Heat time do comando ESC 7 em unidades de 10us (default 140; fábrica das
+   * controladoras chinesas costuma ser 80). Maior = impressão mais escura e um
+   * pouco mais lenta. 0 desliga o envio do comando.
+   */
+  heatTime?: number;
+  /**
+   * Limiar de luminância (0-255) para converter o bitmap em preto e branco
+   * (default 200). Maior = mais pixels do anti-aliasing viram preto (letras
+   * mais cheias); menor = traço mais fino.
+   */
+  luminanceThreshold?: number;
 }
 
 export interface PrintBluetoothTextOptions {

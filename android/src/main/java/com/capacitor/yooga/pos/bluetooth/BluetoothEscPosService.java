@@ -31,7 +31,12 @@ public class BluetoothEscPosService {
   private static final int CHUNK_DELAY_MS = 20;
   // Blocos de raster (GS v 0) limitados em altura pelo mesmo motivo.
   private static final int ROWS_PER_BLOCK = 128;
-  private static final int LUMINANCE_THRESHOLD = 160;
+  // Limiar alto de propósito: captura os pixels cinza do anti-aliasing das
+  // fontes, senão as letras saem falhadas/clarinhas na térmica.
+  private static final int DEFAULT_LUMINANCE_THRESHOLD = 200;
+  // Heat time do ESC 7 em unidades de 10us (default de fábrica costuma ser 80).
+  // Mais alto = impressão mais escura e um pouco mais lenta.
+  private static final int DEFAULT_HEAT_TIME = 140;
 
   public static class BondedDevice {
     public final String name;
@@ -67,7 +72,8 @@ public class BluetoothEscPosService {
    * linhas no final. A MTP-II não tem guilhotina, então o "corte" é só o avanço.
    */
   @SuppressLint("MissingPermission")
-  public void printBitmap(String address, Bitmap bitmap, int feedLines) throws IOException {
+  public void printBitmap(String address, Bitmap bitmap, int feedLines, int heatTime, int luminanceThreshold)
+    throws IOException {
     if (bitmap == null) {
       throw new IOException("Bitmap nulo — falha ao renderizar o conteúdo");
     }
@@ -75,13 +81,26 @@ public class BluetoothEscPosService {
     try {
       OutputStream out = socket.getOutputStream();
       out.write(new byte[] { 0x1B, 0x40 }); // ESC @ (reset)
-      writeRaster(out, bitmap);
+      if (heatTime > 0) {
+        // ESC 7 n1 n2 n3 (controle térmico das controladoras chinesas):
+        // n1 = pontos aquecidos simultâneos ((n1+1)*8), n2 = heat time (10us),
+        // n3 = intervalo entre aquecimentos (10us). Firmwares que não suportam
+        // costumam ignorar. n1=11 (96 pontos) equilibra escuridão x consumo.
+        out.write(new byte[] { 0x1B, 0x37, 11, (byte) Math.min(255, heatTime), 4 });
+      }
+      writeRaster(out, bitmap, luminanceThreshold);
       out.write(new byte[] { 0x1B, 0x64, (byte) Math.max(0, feedLines) }); // ESC d n (avanço)
       out.flush();
       drainDelay(bitmap.getHeight());
     } finally {
       closeQuietly(socket);
     }
+  }
+
+  /** Overload com os defaults de densidade/limiar. */
+  @SuppressLint("MissingPermission")
+  public void printBitmap(String address, Bitmap bitmap, int feedLines) throws IOException {
+    printBitmap(address, bitmap, feedLines, DEFAULT_HEAT_TIME, DEFAULT_LUMINANCE_THRESHOLD);
   }
 
   /**
@@ -155,7 +174,7 @@ public class BluetoothEscPosService {
    * bit ligado = ponto queimado. Pixels transparentes contam como branco
    * (mesma razão do fundo branco forçado no printPdf da térmica interna).
    */
-  private void writeRaster(OutputStream out, Bitmap bitmap) throws IOException {
+  private void writeRaster(OutputStream out, Bitmap bitmap, int luminanceThreshold) throws IOException {
     int width = bitmap.getWidth();
     int height = bitmap.getHeight();
     int bytesPerRow = (width + 7) / 8;
@@ -179,7 +198,7 @@ public class BluetoothEscPosService {
         for (int x = 0; x < width; x++) {
           int c = pixels[x];
           int luminance = (Color.red(c) * 299 + Color.green(c) * 587 + Color.blue(c) * 114) / 1000;
-          if (Color.alpha(c) > 128 && luminance < LUMINANCE_THRESHOLD) {
+          if (Color.alpha(c) > 128 && luminance < luminanceThreshold) {
             block[offset + (x >> 3)] |= (byte) (0x80 >> (x & 7));
           }
         }

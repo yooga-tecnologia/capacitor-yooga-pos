@@ -352,10 +352,14 @@ public class CapacitorYoogaPosPlugin extends Plugin {
       return;
     }
     Integer feedLines = call.getInt("feedLines", 4);
+    // Densidade: heatTime do ESC 7 (10us/un, 0 desliga o comando) e limiar de
+    // luminância do raster (0-255; maior = mais pixels viram preto).
+    Integer heatTime = call.getInt("heatTime", 140);
+    Integer luminanceThreshold = call.getInt("luminanceThreshold", 200);
     try {
       Bitmap bitmap = renderHtmlToBitmap(call);
       Log.d(TAG, "printBluetooth bitmap: " + (bitmap != null ? bitmap.getWidth() + "x" + bitmap.getHeight() : "NULL"));
-      bluetoothService.printBitmap(address, bitmap, feedLines);
+      bluetoothService.printBitmap(address, bitmap, feedLines, heatTime, luminanceThreshold);
       call.resolve();
     } catch (Exception e) {
       Log.e(TAG, "printBluetooth erro: " + e.getMessage(), e);
