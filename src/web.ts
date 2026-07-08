@@ -2,8 +2,14 @@ import { WebPlugin } from '@capacitor/core';
 
 import type {
   CapacitorYoogaPosPlugin,
+  ListBluetoothDevicesResult,
+  PrintBluetoothOptions,
+  PrintBluetoothTextOptions,
+  PrintPdfBluetoothOptions,
   PrintOptions,
   PrintPdfOptions,
+  PrintPdfTcpOptions,
+  PrintTcpOptions,
   PrintTextOptions,
   ShowPixOptions,
 } from './definitions';
@@ -32,5 +38,52 @@ export class CapacitorYoogaPosWeb extends WebPlugin implements CapacitorYoogaPos
 
   async printPdf(options: PrintPdfOptions): Promise<void> {
     console.log('[CapacitorYoogaPos web stub] printPdf', options);
+  }
+
+  async listBluetoothDevices(): Promise<ListBluetoothDevicesResult> {
+    console.log('[CapacitorYoogaPos web stub] listBluetoothDevices()');
+    return { devices: [] };
+  }
+
+  async printBluetooth(options: PrintBluetoothOptions): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] printBluetooth', options);
+  }
+
+  async printPdfBluetooth(options: PrintPdfBluetoothOptions): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] printPdfBluetooth', options);
+  }
+
+  async printBluetoothText(options: PrintBluetoothTextOptions): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] printBluetoothText', options);
+  }
+
+  async startBluetoothDiscovery(): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] startBluetoothDiscovery()');
+    this.notifyListeners('bluetoothDiscoveryFinished', {});
+  }
+
+  async stopBluetoothDiscovery(): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] stopBluetoothDiscovery()');
+  }
+
+  async pairBluetoothDevice(options: { address: string }): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] pairBluetoothDevice', options);
+  }
+
+  async printTcp(options: PrintTcpOptions): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] printTcp', options);
+  }
+
+  async printPdfTcp(options: PrintPdfTcpOptions): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] printPdfTcp', options);
+  }
+
+  async scanNetworkPrinters(): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] scanNetworkPrinters()');
+    this.notifyListeners('networkScanFinished', {});
+  }
+
+  async stopNetworkScan(): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] stopNetworkScan()');
   }
 }
