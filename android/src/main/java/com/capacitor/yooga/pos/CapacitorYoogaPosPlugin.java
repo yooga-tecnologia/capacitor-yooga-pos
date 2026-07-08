@@ -42,6 +42,10 @@ public class CapacitorYoogaPosPlugin extends Plugin {
   private static final String TAG = "CapacitorYoogaPos";
   private boolean printerReady = false;
   private final BluetoothEscPosService bluetoothService = new BluetoothEscPosService();
+  private final com.capacitor.yooga.pos.bluetooth.TcpEscPosService tcpService =
+    new com.capacitor.yooga.pos.bluetooth.TcpEscPosService();
+  private final com.capacitor.yooga.pos.bluetooth.NetworkPrinterScanner networkScanner =
+    new com.capacitor.yooga.pos.bluetooth.NetworkPrinterScanner();
   private com.capacitor.yooga.pos.bluetooth.BluetoothDiscoveryService discoveryService;
 
   private com.capacitor.yooga.pos.bluetooth.BluetoothDiscoveryService discoveryService() {
@@ -56,6 +60,7 @@ public class CapacitorYoogaPosPlugin extends Plugin {
     if (discoveryService != null) {
       discoveryService.cleanup();
     }
+    networkScanner.stop();
     super.handleOnDestroy();
   }
 
@@ -411,12 +416,34 @@ public class CapacitorYoogaPosPlugin extends Plugin {
     Integer luminanceThreshold = call.getInt("luminanceThreshold", 200);
 
     java.util.List<Bitmap> pages = new java.util.ArrayList<>();
+    try {
+      pages = renderPdfToBitmaps(base64, bitmapWidth);
+      bluetoothService.printBitmaps(address, pages, feedLines, heatTime, luminanceThreshold);
+      call.resolve();
+    } catch (Exception e) {
+      Log.e(TAG, "printPdfBluetooth erro: " + e.getMessage(), e);
+      call.reject("Erro na impressão Bluetooth do PDF: " + e.getMessage());
+    } finally {
+      for (Bitmap page : pages) {
+        page.recycle();
+      }
+    }
+  }
+
+  /**
+   * Rasteriza as páginas de um PDF (base64) em bitmaps prontos para a
+   * térmica: fundo branco (PdfRenderer mantém transparência, que sai como
+   * mancha preta) e rodapé em branco aparado. Compartilhado pelos transportes
+   * Bluetooth e TCP.
+   */
+  private java.util.List<Bitmap> renderPdfToBitmaps(String base64, int bitmapWidth) throws Exception {
+    java.util.List<Bitmap> pages = new java.util.ArrayList<>();
     File tempFile = null;
     ParcelFileDescriptor pfd = null;
     PdfRenderer renderer = null;
     try {
       byte[] pdfBytes = Base64.decode(base64, Base64.DEFAULT);
-      tempFile = File.createTempFile("danfe-bt", ".pdf", getContext().getCacheDir());
+      tempFile = File.createTempFile("danfe-raster", ".pdf", getContext().getCacheDir());
       try (FileOutputStream fos = new FileOutputStream(tempFile)) {
         fos.write(pdfBytes);
       }
@@ -424,7 +451,7 @@ public class CapacitorYoogaPosPlugin extends Plugin {
       renderer = new PdfRenderer(pfd);
 
       int pageCount = renderer.getPageCount();
-      Log.d(TAG, "printPdfBluetooth paginas: " + pageCount);
+      Log.d(TAG, "renderPdfToBitmaps paginas: " + pageCount);
       for (int i = 0; i < pageCount; i++) {
         PdfRenderer.Page page = renderer.openPage(i);
         int targetWidth = bitmapWidth;
@@ -434,8 +461,6 @@ public class CapacitorYoogaPosPlugin extends Plugin {
         );
         Bitmap bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
-        // Fundo branco obrigatorio: o PdfRenderer mantem areas transparentes,
-        // que na termica saem como mancha preta.
         canvas.drawColor(Color.WHITE);
         page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT);
         page.close();
@@ -446,16 +471,13 @@ public class CapacitorYoogaPosPlugin extends Plugin {
         }
         pages.add(toPrint);
       }
-
-      bluetoothService.printBitmaps(address, pages, feedLines, heatTime, luminanceThreshold);
-      call.resolve();
+      return pages;
     } catch (Exception e) {
-      Log.e(TAG, "printPdfBluetooth erro: " + e.getMessage(), e);
-      call.reject("Erro na impressão Bluetooth do PDF: " + e.getMessage());
-    } finally {
       for (Bitmap page : pages) {
         page.recycle();
       }
+      throw e;
+    } finally {
       if (renderer != null) {
         try { renderer.close(); } catch (Exception ignored) {}
       }
@@ -466,6 +488,111 @@ public class CapacitorYoogaPosPlugin extends Plugin {
         tempFile.delete();
       }
     }
+  }
+
+  /**
+   * Renderiza o HTML em bitmap e envia como raster ESC/POS para uma térmica
+   * de rede (TCP 9100). Sem permissão de runtime: rede local é INTERNET.
+   */
+  @PluginMethod
+  public void printTcp(PluginCall call) {
+    String ip = call.getString("ip");
+    if (ip == null || ip.isEmpty()) {
+      call.reject("ip da impressora de rede é obrigatório");
+      return;
+    }
+    Integer port = call.getInt("port", com.capacitor.yooga.pos.bluetooth.TcpEscPosService.DEFAULT_PORT);
+    Integer feedLines = call.getInt("feedLines", 4);
+    Integer heatTime = call.getInt("heatTime", 140);
+    Integer luminanceThreshold = call.getInt("luminanceThreshold", 200);
+    try {
+      Bitmap bitmap = renderHtmlToBitmap(call);
+      Log.d(TAG, "printTcp bitmap: " + (bitmap != null ? bitmap.getWidth() + "x" + bitmap.getHeight() : "NULL"));
+      tcpService.printBitmaps(
+        ip,
+        port,
+        java.util.Collections.singletonList(bitmap),
+        feedLines,
+        heatTime,
+        luminanceThreshold
+      );
+      call.resolve();
+    } catch (Exception e) {
+      Log.e(TAG, "printTcp erro: " + e.getMessage(), e);
+      call.reject("Erro na impressão de rede: " + e.getMessage());
+    }
+  }
+
+  /**
+   * Rasteriza um PDF (base64) e imprime na térmica de rede numa única
+   * conexão. Contraparte TCP do printPdfBluetooth (DANFE da NFC-e).
+   */
+  @PluginMethod
+  public void printPdfTcp(PluginCall call) {
+    String ip = call.getString("ip");
+    if (ip == null || ip.isEmpty()) {
+      call.reject("ip da impressora de rede é obrigatório");
+      return;
+    }
+    String base64 = call.getString("base64");
+    if (base64 == null || base64.isEmpty()) {
+      call.reject("base64 do PDF ausente");
+      return;
+    }
+    Integer port = call.getInt("port", com.capacitor.yooga.pos.bluetooth.TcpEscPosService.DEFAULT_PORT);
+    Integer bitmapWidth = call.getInt("bitmapWidth", 384);
+    Integer feedLines = call.getInt("feedLines", 4);
+    Integer heatTime = call.getInt("heatTime", 140);
+    Integer luminanceThreshold = call.getInt("luminanceThreshold", 200);
+
+    java.util.List<Bitmap> pages = new java.util.ArrayList<>();
+    try {
+      pages = renderPdfToBitmaps(base64, bitmapWidth);
+      tcpService.printBitmaps(ip, port, pages, feedLines, heatTime, luminanceThreshold);
+      call.resolve();
+    } catch (Exception e) {
+      Log.e(TAG, "printPdfTcp erro: " + e.getMessage(), e);
+      call.reject("Erro na impressão de rede do PDF: " + e.getMessage());
+    } finally {
+      for (Bitmap page : pages) {
+        page.recycle();
+      }
+    }
+  }
+
+  /**
+   * Varre a(s) subnet(s) locais na porta 9100 atrás de impressoras de rede.
+   * Achados chegam via evento `networkPrinterFound`; o fim dispara
+   * `networkScanFinished`. Mesma ergonomia do discovery Bluetooth.
+   */
+  @PluginMethod
+  public void scanNetworkPrinters(PluginCall call) {
+    try {
+      networkScanner.scan(new com.capacitor.yooga.pos.bluetooth.NetworkPrinterScanner.ScanListener() {
+        @Override
+        public void onPrinterFound(String ip) {
+          JSObject device = new JSObject();
+          device.put("ip", ip);
+          device.put("port", com.capacitor.yooga.pos.bluetooth.TcpEscPosService.DEFAULT_PORT);
+          notifyListeners("networkPrinterFound", device);
+        }
+
+        @Override
+        public void onScanFinished() {
+          notifyListeners("networkScanFinished", new JSObject());
+        }
+      });
+      call.resolve();
+    } catch (Exception e) {
+      Log.e(TAG, "scanNetworkPrinters erro: " + e.getMessage(), e);
+      call.reject(e.getMessage());
+    }
+  }
+
+  @PluginMethod
+  public void stopNetworkScan(PluginCall call) {
+    networkScanner.stop();
+    call.resolve();
   }
 
   /**

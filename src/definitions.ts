@@ -165,6 +165,73 @@ export interface PrintPdfBluetoothOptions {
   luminanceThreshold?: number;
 }
 
+export interface DiscoveredNetworkPrinter {
+  /**
+   * IP da impressora encontrada com a porta 9100 aberta na rede local.
+   * Atenção: 9100 aberta não garante térmica (lasers de escritório também
+   * escutam) — o teste de impressão após selecionar tira a prova.
+   */
+  ip: string;
+  /**
+   * Porta raw de impressão (9100).
+   */
+  port: number;
+}
+
+export interface PrintTcpOptions extends PrintOptions {
+  /**
+   * IP da impressora de rede.
+   */
+  ip: string;
+  /**
+   * Porta raw (default 9100).
+   */
+  port?: number;
+  /**
+   * Linhas em branco a avançar no final (default 4).
+   */
+  feedLines?: number;
+  /**
+   * Heat time do ESC 7 em unidades de 10us (default 140; 0 desliga).
+   */
+  heatTime?: number;
+  /**
+   * Limiar de luminância 0-255 do raster (default 200).
+   */
+  luminanceThreshold?: number;
+}
+
+export interface PrintPdfTcpOptions {
+  /**
+   * IP da impressora de rede.
+   */
+  ip: string;
+  /**
+   * Porta raw (default 9100).
+   */
+  port?: number;
+  /**
+   * Bytes do PDF em base64 (sem prefixo data:).
+   */
+  base64: string;
+  /**
+   * Largura do bitmap em pixels (default 384 = 58mm; 576 = 80mm).
+   */
+  bitmapWidth?: number;
+  /**
+   * Linhas em branco a avançar no final (default 4).
+   */
+  feedLines?: number;
+  /**
+   * Heat time do ESC 7 (default 140; 0 desliga).
+   */
+  heatTime?: number;
+  /**
+   * Limiar de luminância 0-255 (default 200).
+   */
+  luminanceThreshold?: number;
+}
+
 export interface PrintBluetoothTextOptions {
   /**
    * MAC da impressora Bluetooth já pareada no Android.
@@ -256,6 +323,31 @@ export interface CapacitorYoogaPosPlugin {
    */
   pairBluetoothDevice(options: { address: string }): Promise<void>;
 
+  /**
+   * Renderiza o HTML em bitmap e envia como raster ESC/POS para uma térmica
+   * de rede via TCP (porta raw 9100). Contraparte Ethernet/Wi-Fi do
+   * printBluetooth — mesmo motor, outro transporte.
+   */
+  printTcp(options: PrintTcpOptions): Promise<void>;
+
+  /**
+   * Rasteriza um PDF (base64) e imprime na térmica de rede numa única
+   * conexão. Contraparte TCP do printPdfBluetooth (DANFE da NFC-e).
+   */
+  printPdfTcp(options: PrintPdfTcpOptions): Promise<void>;
+
+  /**
+   * Varre a(s) subnet(s) locais na porta 9100 atrás de impressoras de rede
+   * (sweep /24 em poucos segundos). Achados chegam via evento
+   * `networkPrinterFound`; o fim dispara `networkScanFinished`.
+   */
+  scanNetworkPrinters(): Promise<void>;
+
+  /**
+   * Cancela uma varredura de rede em andamento.
+   */
+  stopNetworkScan(): Promise<void>;
+
   addListener(
     eventName: 'bluetoothDeviceFound',
     listenerFunc: (device: DiscoveredBluetoothDevice) => void,
@@ -263,6 +355,16 @@ export interface CapacitorYoogaPosPlugin {
 
   addListener(
     eventName: 'bluetoothDiscoveryFinished',
+    listenerFunc: () => void,
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'networkPrinterFound',
+    listenerFunc: (printer: DiscoveredNetworkPrinter) => void,
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'networkScanFinished',
     listenerFunc: () => void,
   ): Promise<PluginListenerHandle>;
 

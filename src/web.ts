@@ -8,6 +8,8 @@ import type {
   PrintPdfBluetoothOptions,
   PrintOptions,
   PrintPdfOptions,
+  PrintPdfTcpOptions,
+  PrintTcpOptions,
   PrintTextOptions,
   ShowPixOptions,
 } from './definitions';
@@ -66,5 +68,22 @@ export class CapacitorYoogaPosWeb extends WebPlugin implements CapacitorYoogaPos
 
   async pairBluetoothDevice(options: { address: string }): Promise<void> {
     console.log('[CapacitorYoogaPos web stub] pairBluetoothDevice', options);
+  }
+
+  async printTcp(options: PrintTcpOptions): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] printTcp', options);
+  }
+
+  async printPdfTcp(options: PrintPdfTcpOptions): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] printPdfTcp', options);
+  }
+
+  async scanNetworkPrinters(): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] scanNetworkPrinters()');
+    this.notifyListeners('networkScanFinished', {});
+  }
+
+  async stopNetworkScan(): Promise<void> {
+    console.log('[CapacitorYoogaPos web stub] stopNetworkScan()');
   }
 }
