@@ -377,9 +377,13 @@ public class CapacitorYoogaPosPlugin extends Plugin {
       return;
     }
     Integer feedLines = call.getInt("feedLines", 4);
-    // Densidade: heatTime do ESC 7 (10us/un, 0 desliga o comando) e limiar de
-    // luminância do raster (0-255; maior = mais pixels viram preto).
-    Integer heatTime = call.getInt("heatTime", 140);
+    // Densidade: heatTime do ESC 7 (10us/un) e limiar de luminância do raster
+    // (0-255; maior = mais pixels viram preto). ESC 7 é opt-in (default 0 =
+    // não envia): é comando fora do padrão Epson e quebra o parser de
+    // firmwares como o da Trix POS80, que passa a imprimir o raster como
+    // texto. Quem precisa de impressão mais escura (ex.: MTP-II) liga via
+    // config heatTime > 0.
+    Integer heatTime = call.getInt("heatTime", 0);
     Integer luminanceThreshold = call.getInt("luminanceThreshold", 200);
     try {
       Bitmap bitmap = renderHtmlToBitmap(call);
@@ -412,7 +416,8 @@ public class CapacitorYoogaPosPlugin extends Plugin {
     }
     Integer bitmapWidth = call.getInt("bitmapWidth", 384);
     Integer feedLines = call.getInt("feedLines", 4);
-    Integer heatTime = call.getInt("heatTime", 140);
+    // ESC 7 opt-in (default 0 = não envia): ver comentário no printBluetooth.
+    Integer heatTime = call.getInt("heatTime", 0);
     Integer luminanceThreshold = call.getInt("luminanceThreshold", 200);
 
     java.util.List<Bitmap> pages = new java.util.ArrayList<>();
@@ -503,7 +508,10 @@ public class CapacitorYoogaPosPlugin extends Plugin {
     }
     Integer port = call.getInt("port", com.capacitor.yooga.pos.bluetooth.TcpEscPosService.DEFAULT_PORT);
     Integer feedLines = call.getInt("feedLines", 4);
-    Integer heatTime = call.getInt("heatTime", 140);
+    // ESC 7 opt-in (default 0 = não envia): ver comentário no printBluetooth.
+    // Confirmado em campo: Trix POS80 de rede imprimia o raster como texto
+    // quando o job abria com ESC 7.
+    Integer heatTime = call.getInt("heatTime", 0);
     Integer luminanceThreshold = call.getInt("luminanceThreshold", 200);
     try {
       Bitmap bitmap = renderHtmlToBitmap(call);
@@ -542,7 +550,8 @@ public class CapacitorYoogaPosPlugin extends Plugin {
     Integer port = call.getInt("port", com.capacitor.yooga.pos.bluetooth.TcpEscPosService.DEFAULT_PORT);
     Integer bitmapWidth = call.getInt("bitmapWidth", 384);
     Integer feedLines = call.getInt("feedLines", 4);
-    Integer heatTime = call.getInt("heatTime", 140);
+    // ESC 7 opt-in (default 0 = não envia): ver comentário no printBluetooth.
+    Integer heatTime = call.getInt("heatTime", 0);
     Integer luminanceThreshold = call.getInt("luminanceThreshold", 200);
 
     java.util.List<Bitmap> pages = new java.util.ArrayList<>();

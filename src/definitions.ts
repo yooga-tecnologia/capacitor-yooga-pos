@@ -123,9 +123,11 @@ export interface PrintBluetoothOptions extends PrintOptions {
    */
   feedLines?: number;
   /**
-   * Heat time do comando ESC 7 em unidades de 10us (default 140; fábrica das
-   * controladoras chinesas costuma ser 80). Maior = impressão mais escura e um
-   * pouco mais lenta. 0 desliga o envio do comando.
+   * Heat time do comando ESC 7 em unidades de 10us. Default 0 = NÃO envia o
+   * comando: ESC 7 é extensão fora do padrão Epson e quebra o parser de
+   * firmwares como o da Trix POS80 (o raster sai impresso como texto). Em
+   * impressoras que suportam (ex.: MTP-II), valores maiores deixam a
+   * impressão mais escura e um pouco mais lenta (140 foi o valor calibrado).
    */
   heatTime?: number;
   /**
@@ -156,7 +158,8 @@ export interface PrintPdfBluetoothOptions {
    */
   feedLines?: number;
   /**
-   * Heat time do ESC 7 em unidades de 10us (default 140; 0 desliga).
+   * Heat time do ESC 7 em unidades de 10us (default 0 = não envia; ver
+   * PrintBluetoothOptions.heatTime).
    */
   heatTime?: number;
   /**
@@ -192,7 +195,8 @@ export interface PrintTcpOptions extends PrintOptions {
    */
   feedLines?: number;
   /**
-   * Heat time do ESC 7 em unidades de 10us (default 140; 0 desliga).
+   * Heat time do ESC 7 em unidades de 10us (default 0 = não envia; ver
+   * PrintBluetoothOptions.heatTime).
    */
   heatTime?: number;
   /**
@@ -223,7 +227,8 @@ export interface PrintPdfTcpOptions {
    */
   feedLines?: number;
   /**
-   * Heat time do ESC 7 (default 140; 0 desliga).
+   * Heat time do ESC 7 (default 0 = não envia; ver
+   * PrintBluetoothOptions.heatTime).
    */
   heatTime?: number;
   /**

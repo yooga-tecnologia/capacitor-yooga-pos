@@ -32,9 +32,12 @@ public class BluetoothEscPosService {
   // Limiar alto de propósito: captura os pixels cinza do anti-aliasing das
   // fontes, senão as letras saem falhadas/clarinhas na térmica.
   private static final int DEFAULT_LUMINANCE_THRESHOLD = 200;
-  // Heat time do ESC 7 em unidades de 10us (default de fábrica costuma ser 80).
-  // Mais alto = impressão mais escura e um pouco mais lenta.
-  private static final int DEFAULT_HEAT_TIME = 140;
+  // Heat time do ESC 7 em unidades de 10us. Default 0 = NÃO envia o comando:
+  // ESC 7 é extensão de controladora chinesa (fora do padrão Epson) e
+  // dessincroniza o parser de firmwares como o da Trix POS80, que passa a
+  // imprimir o raster GS v 0 como texto. Impressoras que aceitam (ex.: MTP-II)
+  // podem ligar via config para sair mais escuro (140 foi o valor calibrado).
+  private static final int DEFAULT_HEAT_TIME = 0;
 
   public static class BondedDevice {
     public final String name;
