@@ -33,8 +33,11 @@ final class EscPosEncoder {
     if (heatTime > 0) {
       // ESC 7 n1 n2 n3 (controle térmico das controladoras chinesas):
       // n1 = pontos aquecidos simultâneos ((n1+1)*8), n2 = heat time (10us),
-      // n3 = intervalo entre aquecimentos (10us). Firmwares que não suportam
-      // costumam ignorar. n1=11 (96 pontos) equilibra escuridão x consumo.
+      // n3 = intervalo entre aquecimentos (10us). n1=11 (96 pontos) equilibra
+      // escuridão x consumo. ATENÇÃO: comando fora do padrão Epson — firmwares
+      // que não o conhecem (ex.: Trix POS80) dessincronizam o parser e
+      // imprimem o raster seguinte como texto. Por isso é opt-in
+      // (heatTime 0 = não envia), só ligar em impressoras validadas.
       out.write(new byte[] { 0x1B, 0x37, 11, (byte) Math.min(255, heatTime), 4 });
     }
     for (Bitmap bitmap : bitmaps) {

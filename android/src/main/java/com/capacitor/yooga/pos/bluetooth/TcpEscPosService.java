@@ -21,7 +21,9 @@ public class TcpEscPosService {
 
   private static final int CONNECT_TIMEOUT_MS = 4000;
   private static final int CHUNK_SIZE = 4096;
-  private static final int DEFAULT_HEAT_TIME = 140;
+  // 0 = não envia ESC 7 (quebra o parser de firmwares como o da Trix POS80);
+  // ver BluetoothEscPosService.DEFAULT_HEAT_TIME.
+  private static final int DEFAULT_HEAT_TIME = 0;
   private static final int DEFAULT_LUMINANCE_THRESHOLD = 200;
 
   public void printBitmaps(
