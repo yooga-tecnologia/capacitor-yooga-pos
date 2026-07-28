@@ -38,6 +38,11 @@ public class BluetoothEscPosService {
   // imprimir o raster GS v 0 como texto. Impressoras que aceitam (ex.: MTP-II)
   // podem ligar via config para sair mais escuro (140 foi o valor calibrado).
   private static final int DEFAULT_HEAT_TIME = 0;
+  // Térmica portátil Bluetooth (MTP-II e afins) não tem guilhotina — o avanço
+  // de papel é o "corte". Enviar GS V numa impressora sem cortador é, na melhor
+  // das hipóteses, ignorado; na pior, dessincroniza o parser (ver ESC 7 acima).
+  // Quem parear uma Bluetooth COM cortador liga via config.
+  private static final boolean DEFAULT_CUT_PAPER = false;
 
   public static class BondedDevice {
     public final String name;
@@ -75,7 +80,27 @@ public class BluetoothEscPosService {
   @SuppressLint("MissingPermission")
   public void printBitmap(String address, Bitmap bitmap, int feedLines, int heatTime, int luminanceThreshold)
     throws IOException {
-    printBitmaps(address, java.util.Collections.singletonList(bitmap), feedLines, heatTime, luminanceThreshold);
+    printBitmap(address, bitmap, feedLines, heatTime, luminanceThreshold, DEFAULT_CUT_PAPER);
+  }
+
+  /** Overload com controle explícito do corte (ver {@link #DEFAULT_CUT_PAPER}). */
+  @SuppressLint("MissingPermission")
+  public void printBitmap(
+    String address,
+    Bitmap bitmap,
+    int feedLines,
+    int heatTime,
+    int luminanceThreshold,
+    boolean cutPaper
+  ) throws IOException {
+    printBitmaps(
+      address,
+      java.util.Collections.singletonList(bitmap),
+      feedLines,
+      heatTime,
+      luminanceThreshold,
+      cutPaper
+    );
   }
 
   /** Overload com os defaults de densidade/limiar. */
@@ -97,6 +122,19 @@ public class BluetoothEscPosService {
     int heatTime,
     int luminanceThreshold
   ) throws IOException {
+    printBitmaps(address, bitmaps, feedLines, heatTime, luminanceThreshold, DEFAULT_CUT_PAPER);
+  }
+
+  /** Overload com controle explícito do corte (ver {@link #DEFAULT_CUT_PAPER}). */
+  @SuppressLint("MissingPermission")
+  public void printBitmaps(
+    String address,
+    java.util.List<Bitmap> bitmaps,
+    int feedLines,
+    int heatTime,
+    int luminanceThreshold,
+    boolean cutPaper
+  ) throws IOException {
     if (bitmaps == null || bitmaps.isEmpty()) {
       throw new IOException("Nenhum bitmap para imprimir");
     }
@@ -108,7 +146,16 @@ public class BluetoothEscPosService {
     BluetoothSocket socket = connect(address);
     try {
       OutputStream out = socket.getOutputStream();
-      EscPosEncoder.writeJob(out, bitmaps, feedLines, heatTime, luminanceThreshold, CHUNK_SIZE, CHUNK_DELAY_MS);
+      EscPosEncoder.writeJob(
+        out,
+        bitmaps,
+        feedLines,
+        heatTime,
+        luminanceThreshold,
+        cutPaper,
+        CHUNK_SIZE,
+        CHUNK_DELAY_MS
+      );
       int totalHeight = 0;
       for (Bitmap bitmap : bitmaps) {
         totalHeight += bitmap.getHeight();

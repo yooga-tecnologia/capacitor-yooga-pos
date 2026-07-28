@@ -385,10 +385,12 @@ public class CapacitorYoogaPosPlugin extends Plugin {
     // config heatTime > 0.
     Integer heatTime = call.getInt("heatTime", 0);
     Integer luminanceThreshold = call.getInt("luminanceThreshold", 200);
+    // Corte (GS V 1) opt-in no Bluetooth: portátil não tem guilhotina.
+    Boolean cutPaper = call.getBoolean("cutPaper", false);
     try {
       Bitmap bitmap = renderHtmlToBitmap(call);
       Log.d(TAG, "printBluetooth bitmap: " + (bitmap != null ? bitmap.getWidth() + "x" + bitmap.getHeight() : "NULL"));
-      bluetoothService.printBitmap(address, bitmap, feedLines, heatTime, luminanceThreshold);
+      bluetoothService.printBitmap(address, bitmap, feedLines, heatTime, luminanceThreshold, cutPaper);
       call.resolve();
     } catch (Exception e) {
       Log.e(TAG, "printBluetooth erro: " + e.getMessage(), e);
@@ -419,11 +421,13 @@ public class CapacitorYoogaPosPlugin extends Plugin {
     // ESC 7 opt-in (default 0 = não envia): ver comentário no printBluetooth.
     Integer heatTime = call.getInt("heatTime", 0);
     Integer luminanceThreshold = call.getInt("luminanceThreshold", 200);
+    // Corte opt-in no Bluetooth: ver comentário no printBluetooth.
+    Boolean cutPaper = call.getBoolean("cutPaper", false);
 
     java.util.List<Bitmap> pages = new java.util.ArrayList<>();
     try {
       pages = renderPdfToBitmaps(base64, bitmapWidth);
-      bluetoothService.printBitmaps(address, pages, feedLines, heatTime, luminanceThreshold);
+      bluetoothService.printBitmaps(address, pages, feedLines, heatTime, luminanceThreshold, cutPaper);
       call.resolve();
     } catch (Exception e) {
       Log.e(TAG, "printPdfBluetooth erro: " + e.getMessage(), e);
@@ -513,6 +517,9 @@ public class CapacitorYoogaPosPlugin extends Plugin {
     // quando o job abria com ESC 7.
     Integer heatTime = call.getInt("heatTime", 0);
     Integer luminanceThreshold = call.getInt("luminanceThreshold", 200);
+    // Corte (GS V 1) ligado por default na rede: um job = uma via. Sem ele as
+    // comandas de categorias diferentes saem emendadas na mesma tira.
+    Boolean cutPaper = call.getBoolean("cutPaper", true);
     try {
       Bitmap bitmap = renderHtmlToBitmap(call);
       Log.d(TAG, "printTcp bitmap: " + (bitmap != null ? bitmap.getWidth() + "x" + bitmap.getHeight() : "NULL"));
@@ -522,7 +529,8 @@ public class CapacitorYoogaPosPlugin extends Plugin {
         java.util.Collections.singletonList(bitmap),
         feedLines,
         heatTime,
-        luminanceThreshold
+        luminanceThreshold,
+        cutPaper
       );
       call.resolve();
     } catch (Exception e) {
@@ -553,11 +561,13 @@ public class CapacitorYoogaPosPlugin extends Plugin {
     // ESC 7 opt-in (default 0 = não envia): ver comentário no printBluetooth.
     Integer heatTime = call.getInt("heatTime", 0);
     Integer luminanceThreshold = call.getInt("luminanceThreshold", 200);
+    // Corte ligado por default na rede: ver comentário no printTcp.
+    Boolean cutPaper = call.getBoolean("cutPaper", true);
 
     java.util.List<Bitmap> pages = new java.util.ArrayList<>();
     try {
       pages = renderPdfToBitmaps(base64, bitmapWidth);
-      tcpService.printBitmaps(ip, port, pages, feedLines, heatTime, luminanceThreshold);
+      tcpService.printBitmaps(ip, port, pages, feedLines, heatTime, luminanceThreshold, cutPaper);
       call.resolve();
     } catch (Exception e) {
       Log.e(TAG, "printPdfTcp erro: " + e.getMessage(), e);

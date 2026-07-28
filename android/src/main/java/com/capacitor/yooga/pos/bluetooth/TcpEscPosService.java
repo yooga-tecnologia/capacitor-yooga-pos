@@ -25,6 +25,11 @@ public class TcpEscPosService {
   // ver BluetoothEscPosService.DEFAULT_HEAT_TIME.
   private static final int DEFAULT_HEAT_TIME = 0;
   private static final int DEFAULT_LUMINANCE_THRESHOLD = 200;
+  // Impressora de rede 80mm normalmente tem guilhotina, e o uso é multi-job:
+  // cada comanda de categoria (Bar, Cozinha) é uma via que alguém pega
+  // separado. Sem corte elas saem emendadas na mesma tira. Default ligado —
+  // contrário do Bluetooth, onde a portátil não tem cortador.
+  private static final boolean DEFAULT_CUT_PAPER = true;
 
   public void printBitmaps(
     String ip,
@@ -33,6 +38,19 @@ public class TcpEscPosService {
     int feedLines,
     int heatTime,
     int luminanceThreshold
+  ) throws IOException {
+    printBitmaps(ip, port, bitmaps, feedLines, heatTime, luminanceThreshold, DEFAULT_CUT_PAPER);
+  }
+
+  /** Overload com controle explícito do corte (ver {@link #DEFAULT_CUT_PAPER}). */
+  public void printBitmaps(
+    String ip,
+    int port,
+    List<Bitmap> bitmaps,
+    int feedLines,
+    int heatTime,
+    int luminanceThreshold,
+    boolean cutPaper
   ) throws IOException {
     if (bitmaps == null || bitmaps.isEmpty()) {
       throw new IOException("Nenhum bitmap para imprimir");
@@ -45,7 +63,7 @@ public class TcpEscPosService {
     try (Socket socket = new Socket()) {
       socket.connect(new InetSocketAddress(ip, port > 0 ? port : DEFAULT_PORT), CONNECT_TIMEOUT_MS);
       OutputStream out = socket.getOutputStream();
-      EscPosEncoder.writeJob(out, bitmaps, feedLines, heatTime, luminanceThreshold, CHUNK_SIZE, 0);
+      EscPosEncoder.writeJob(out, bitmaps, feedLines, heatTime, luminanceThreshold, cutPaper, CHUNK_SIZE, 0);
       // Meio segundo antes do close: TCP entrega, mas impressoras baratas
       // descartam o que ainda não drenou do buffer quando o peer some.
       try {

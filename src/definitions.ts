@@ -136,6 +136,13 @@ export interface PrintBluetoothOptions extends PrintOptions {
    * mais cheias); menor = traço mais fino.
    */
   luminanceThreshold?: number;
+  /**
+   * Emite `GS V 1` (corte parcial) no fim do job — um job impresso = uma via
+   * destacada. Default **false** no Bluetooth: térmica portátil (MTP-II e
+   * afins) não tem guilhotina e o avanço de papel faz as vezes do corte.
+   * Ligue só em impressora Bluetooth com cortador.
+   */
+  cutPaper?: boolean;
 }
 
 export interface PrintPdfBluetoothOptions {
@@ -166,6 +173,11 @@ export interface PrintPdfBluetoothOptions {
    * Limiar de luminância 0-255 do raster (default 200).
    */
   luminanceThreshold?: number;
+  /**
+   * Corte parcial no fim do job (default **false** no Bluetooth; ver
+   * `PrintBluetoothOptions.cutPaper`).
+   */
+  cutPaper?: boolean;
 }
 
 export interface DiscoveredNetworkPrinter {
@@ -203,6 +215,14 @@ export interface PrintTcpOptions extends PrintOptions {
    * Limiar de luminância 0-255 do raster (default 200).
    */
   luminanceThreshold?: number;
+  /**
+   * Emite `GS V 1` (corte parcial) no fim do job — um job impresso = uma via
+   * destacada. Default **true** na rede: impressora de rede normalmente tem
+   * guilhotina e o uso é multi-job (uma comanda por categoria de impressão),
+   * então sem corte elas saem emendadas na mesma tira. Desligue se a
+   * impressora de rede não tiver cortador.
+   */
+  cutPaper?: boolean;
 }
 
 export interface PrintPdfTcpOptions {
@@ -235,6 +255,11 @@ export interface PrintPdfTcpOptions {
    * Limiar de luminância 0-255 (default 200).
    */
   luminanceThreshold?: number;
+  /**
+   * Corte parcial no fim do job (default **true** na rede; ver
+   * `PrintTcpOptions.cutPaper`).
+   */
+  cutPaper?: boolean;
 }
 
 export interface PrintBluetoothTextOptions {
