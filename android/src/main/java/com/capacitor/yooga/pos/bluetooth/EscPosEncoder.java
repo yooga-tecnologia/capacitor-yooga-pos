@@ -26,6 +26,7 @@ final class EscPosEncoder {
     int feedLines,
     int heatTime,
     int luminanceThreshold,
+    boolean cutPaper,
     int chunkSize,
     int chunkDelayMs
   ) throws IOException {
@@ -44,6 +45,17 @@ final class EscPosEncoder {
       writeRaster(out, bitmap, luminanceThreshold, chunkSize, chunkDelayMs);
     }
     out.write(new byte[] { 0x1B, 0x64, (byte) Math.max(0, feedLines) }); // ESC d n (avanço)
+    if (cutPaper) {
+      // GS V 1 (corte parcial). Um job = uma via: sem isso as comandas de
+      // categorias diferentes (Bar, Cozinha) saem emendadas na mesma tira e
+      // alguem tem que destacar na mao. O avanco acima ja compensa o offset
+      // entre cabeca de impressao e guilhotina.
+      //
+      // Opt-in por transporte: termica portatil (MTP-II e afins) nao tem
+      // guilhotina e o comando e ignorado na melhor das hipoteses — mesmo
+      // risco de parser do ESC 7. So ligar em impressora com cortador.
+      out.write(new byte[] { 0x1D, 0x56, 0x01 });
+    }
     out.flush();
   }
 
