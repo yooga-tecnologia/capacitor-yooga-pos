@@ -12,19 +12,37 @@ import com.capacitor.yooga.pos.R;
 
 import com.elgin.e1.Display.E1_Display;
 
+import java.util.Locale;
+
 final public class Pix4Service {
 
   private static final String TAG = "Pix4Service";
 
   private final Activity mActivity;
 
-  public Pix4Service(Activity activityRef) {
+  private Pix4Service(Activity activityRef, E1_Display.DisplayDevices target) {
     mActivity = activityRef;
 
+    disableSdkFileLogging();
+    E1_Display.init(mActivity, target);
+  }
+
+  /**
+   * Cria o serviço só em aparelho com display suportado; nos demais devolve
+   * null e o SDK Elgin nem é inicializado. Sem isso, qualquer Android comum
+   * caía no ramo PIX4 do SDK (display USB externo), que pede
+   * WRITE_EXTERNAL_STORAGE e abre uma thread própria que derruba o app ao
+   * enumerar dispositivos USB.
+   */
+  public static Pix4Service createIfSupported(Activity activityRef) {
     E1_Display.DisplayDevices target = resolveDisplayDevice();
     Log.i(TAG, "Display device resolvido: " + target
-            + " (manufacturer=" + Build.MANUFACTURER + ", model=" + Build.MODEL + ")");
-    E1_Display.init(mActivity, target);
+            + " (manufacturer=" + Build.MANUFACTURER + ", model=" + Build.MODEL
+            + ", device=" + Build.DEVICE + ")");
+    if (activityRef == null || target == null) {
+      return null;
+    }
+    return new Pix4Service(activityRef, target);
   }
 
   /**
@@ -33,15 +51,39 @@ final public class Pix4Service {
    * com display traseiro estilo TPro): o display fica como "objeto nulo" e a
    * chamada falha com "Não foi possível concluir a operação".
    *
-   * Solução: se o fabricante for iMin, força TPRO. Para qualquer outro
-   * (Elgin), mantém AUTO porque a SDK já distingue TPro x PIX4 corretamente.
+   * Solução: se o fabricante for iMin, força TPRO. Para hardware Elgin e para
+   * os modelos que o AUTO do SDK reconhece (ro.product.device), mantém AUTO
+   * porque a SDK já distingue TPro x PIX4 corretamente. Qualquer outro
+   * aparelho retorna null: o AUTO o mandaria para o ramo PIX4 sem ter display.
    */
   private static E1_Display.DisplayDevices resolveDisplayDevice() {
     String manufacturer = Build.MANUFACTURER == null ? "" : Build.MANUFACTURER;
     if ("iMin".equalsIgnoreCase(manufacturer)) {
       return E1_Display.DisplayDevices.TPRO;
     }
-    return E1_Display.DisplayDevices.AUTO;
+    String device = Build.DEVICE == null ? "" : Build.DEVICE.trim();
+    if (manufacturer.toLowerCase(Locale.ROOT).contains("elgin")
+            || "I22T01".equals(device)
+            || "D1".equals(device)
+            || "M11Pro".equalsIgnoreCase(device)
+            || "Handheld-POS".equalsIgnoreCase(device)) {
+      return E1_Display.DisplayDevices.AUTO;
+    }
+    return null;
+  }
+
+  /**
+   * O DisplaySDK embutido no e1 (com.pavolibrary) grava log em arquivo no
+   * armazenamento externo e lança RuntimeException quando não consegue — o que
+   * é sempre o caso sem WRITE_EXTERNAL_STORAGE. Via reflexão porque a classe
+   * vem de um jar aninhado no AAR.
+   */
+  private static void disableSdkFileLogging() {
+    try {
+      Class.forName("com.pavolibrary.utils.LogUtils").getField("isWrite").setBoolean(null, false);
+    } catch (Throwable t) {
+      Log.w(TAG, "Não foi possível desligar o log em arquivo do DisplaySDK: " + t);
+    }
   }
 
   public int inicializaDisplay() {

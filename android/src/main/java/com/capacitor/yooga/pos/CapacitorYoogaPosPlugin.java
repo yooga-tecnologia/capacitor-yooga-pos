@@ -21,8 +21,8 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
-import com.izettle.html2bitmap.Html2Bitmap;
 import com.izettle.html2bitmap.Html2BitmapConfigurator;
+import com.izettle.html2bitmap.YoogaHtml2Bitmap;
 import com.izettle.html2bitmap.content.WebViewContent;
 
 import java.io.File;
@@ -41,6 +41,8 @@ public class CapacitorYoogaPosPlugin extends Plugin {
 
   private static final String TAG = "CapacitorYoogaPos";
   private boolean printerReady = false;
+  private Pix4Service displayService;
+  private boolean displayResolved = false;
   private final BluetoothEscPosService bluetoothService = new BluetoothEscPosService();
   private final com.capacitor.yooga.pos.bluetooth.TcpEscPosService tcpService =
     new com.capacitor.yooga.pos.bluetooth.TcpEscPosService();
@@ -105,65 +107,79 @@ public class CapacitorYoogaPosPlugin extends Plugin {
     return printerReady;
   }
 
+  /**
+   * Display do cliente (traseiro). Instância única: cada `new` refazia o
+   * E1_Display.init. Fica null em aparelho sem display suportado — aí os
+   * métodos de display viram no-op em vez de inicializar o SDK Elgin.
+   */
+  private synchronized Pix4Service displayService() {
+    if (!displayResolved) {
+      displayService = Pix4Service.createIfSupported(getActivity());
+      displayResolved = true;
+    }
+    return displayService;
+  }
+
   @PluginMethod
   public void showLogoOnDisplay(PluginCall call) {
-    Pix4Service p = new Pix4Service(getActivity());
-    p.apresentaImagemYooga();
-    call.resolve();
+    try {
+      Pix4Service p = displayService();
+      if (p != null) {
+        p.apresentaImagemYooga();
+      }
+      call.resolve();
+    } catch (Throwable t) {
+      Log.e(TAG, "showLogoOnDisplay erro: " + t.getMessage(), t);
+      call.reject("Erro ao exibir logo no display: " + t.getMessage());
+    }
   }
 
   @PluginMethod
   public void showPix(PluginCall call) {
     String value = call.getString("value");
-    Pix4Service p = new Pix4Service(getActivity());
-    p.apresentaPix(value);
-    call.resolve();
+    try {
+      Pix4Service p = displayService();
+      if (p != null) {
+        p.apresentaPix(value);
+      }
+      call.resolve();
+    } catch (Throwable t) {
+      Log.e(TAG, "showPix erro: " + t.getMessage(), t);
+      call.reject("Erro ao exibir Pix no display: " + t.getMessage());
+    }
   }
 
   @PluginMethod
   public void print(PluginCall call) {
-    String html = call.getString("html");
     Integer cutPaperLength = call.getInt("cutPaperLength", 4);
-    Integer webViewZoom = call.getInt("webViewZoom", 100);
-    Integer bitmapWidth = call.getInt("bitmapWidth", 384);
-    Integer measureDelay = call.getInt("measureDelay", 0);
-    Integer screenshotDelay = call.getInt("screenshotDelay", 0);
-    Boolean strictMode = call.getBoolean("strictMode", false);
-    Integer timeout = call.getInt("timeout", 30000);
-    Integer builderTextZoom = call.getInt("builderTextZoom", 100);
 
     Log.d(TAG, "print() chamado, printerReady=" + printerReady);
     ensurePrinterConnection();
 
-    Html2BitmapConfigurator html2BitmapConfigurator = new Html2BitmapConfigurator() {
-      @Override
-      public void configureWebView(WebView webview) {
-        webview.getSettings().setTextZoom(webViewZoom);
+    Bitmap bitmap = null;
+    try {
+      bitmap = renderHtmlToBitmap(call);
+      Log.d(TAG, "bitmap: " + (bitmap != null ? bitmap.getWidth() + "x" + bitmap.getHeight() : "NULL"));
+      if (bitmap == null) {
+        call.reject("Falha ao converter o HTML em bitmap para impressão");
+        return;
       }
-    };
 
-    Html2Bitmap build = new Html2Bitmap.Builder()
-      .setContext(getContext())
-      .setContent(WebViewContent.html(html))
-      .setBitmapWidth(bitmapWidth)
-      .setMeasureDelay(measureDelay)
-      .setScreenshotDelay(screenshotDelay)
-      .setStrictMode(strictMode)
-      .setTimeout(timeout)
-      .setTextZoom(builderTextZoom)
-      .setConfigurator(html2BitmapConfigurator)
-      .build();
+      int printResult = Termica.ImprimeBitmap(bitmap);
+      Log.d(TAG, "ImprimeBitmap: " + printResult);
 
-    Bitmap bitmap = build.getBitmap();
-    Log.d(TAG, "bitmap: " + (bitmap != null ? bitmap.getWidth() + "x" + bitmap.getHeight() : "NULL"));
+      int cutResult = Termica.Corte(cutPaperLength);
+      Log.d(TAG, "Corte: " + cutResult);
 
-    int printResult = Termica.ImprimeBitmap(bitmap);
-    Log.d(TAG, "ImprimeBitmap: " + printResult);
-
-    int cutResult = Termica.Corte(cutPaperLength);
-    Log.d(TAG, "Corte: " + cutResult);
-
-    call.resolve();
+      call.resolve();
+    } catch (Throwable t) {
+      Log.e(TAG, "print erro: " + t.getMessage(), t);
+      call.reject("Erro na impressão: " + t.getMessage());
+    } finally {
+      if (bitmap != null) {
+        bitmap.recycle();
+      }
+    }
   }
 
   @PluginMethod
@@ -800,18 +816,19 @@ public class CapacitorYoogaPosPlugin extends Plugin {
       }
     };
 
-    return new Html2Bitmap.Builder()
-      .setContext(getContext())
-      .setContent(WebViewContent.html(html))
-      .setBitmapWidth(bitmapWidth)
-      .setMeasureDelay(measureDelay)
-      .setScreenshotDelay(screenshotDelay)
-      .setStrictMode(strictMode)
-      .setTimeout(timeout)
-      .setTextZoom(builderTextZoom)
-      .setConfigurator(configurator)
-      .build()
-      .getBitmap();
+    // YoogaHtml2Bitmap em vez de Html2Bitmap.getBitmap(): mesmo render, mas
+    // libera a thread e o WebView de cada job e trata o timeout em ms.
+    return YoogaHtml2Bitmap.render(
+      getContext(),
+      WebViewContent.html(html),
+      bitmapWidth,
+      measureDelay,
+      screenshotDelay,
+      strictMode,
+      timeout,
+      builderTextZoom,
+      configurator
+    );
   }
 
   /**
