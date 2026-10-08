@@ -123,7 +123,8 @@ final public class Pix4Service {
 
   // Apresenta um QRCode na tela do dispostivo, para o app-experience todos os códigos terão o mesmo tamanho e estarão nas mesma posição.
   public void apresentaPix(String pixCode) {
-    // Refresh no display.
+    // Limpa a tela antes de desenhar (no SDK, InicializaDisplay só faz clear;
+    // quem reconecta é o E1_Display.init, chamado uma vez no construtor).
     this.inicializaDisplay();
 
     E1_Display.ApresentaQrCode(pixCode, 200, 80, 50);

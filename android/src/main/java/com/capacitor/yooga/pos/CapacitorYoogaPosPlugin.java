@@ -63,6 +63,7 @@ public class CapacitorYoogaPosPlugin extends Plugin {
       discoveryService.cleanup();
     }
     networkScanner.stop();
+    releaseDisplayService();
     super.handleOnDestroy();
   }
 
@@ -118,6 +119,22 @@ public class CapacitorYoogaPosPlugin extends Plugin {
       displayResolved = true;
     }
     return displayService;
+  }
+
+  /**
+   * Fecha a conexão do SDK com o display (no M11 libera o serviço da
+   * impressora/LCD; no iMin é no-op) e permite recriar numa Activity nova.
+   */
+  private synchronized void releaseDisplayService() {
+    if (displayService != null) {
+      try {
+        displayService.desconectarDisplay();
+      } catch (Throwable t) {
+        Log.w(TAG, "desconectarDisplay erro: " + t.getMessage(), t);
+      }
+    }
+    displayService = null;
+    displayResolved = false;
   }
 
   @PluginMethod
