@@ -27,6 +27,9 @@ import com.izettle.html2bitmap.content.WebViewContent;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 
 @CapacitorPlugin(
@@ -40,7 +43,26 @@ import java.io.FileOutputStream;
 public class CapacitorYoogaPosPlugin extends Plugin {
 
   private static final String TAG = "CapacitorYoogaPos";
+  /** Mantido em sincronia com package.json; sai no logcat no load para conferir o build instalado. */
+  private static final String PLUGIN_VERSION = "0.4.2";
   private boolean printerReady = false;
+
+  /**
+   * Fila do display do cliente. O SDK Elgin/iMin não serializa nada: cada
+   * chamada salva o frame em arquivos de caminho fixo no sdcard, converte num
+   * pool de threads sem limite e escreve o resultado no /dev/spidev na main
+   * thread. Duas chamadas próximas (showLogo do fechamento do Pix + showPix do
+   * próximo) disputam o mesmo arquivo e resetam o LCD no meio de uma
+   * transferência — a telinha trava e a main thread fica presa no SPI (ANR).
+   *
+   * Aqui: um executor único, intervalo mínimo entre envios e coalescência —
+   * só o pedido mais recente chega no SDK; os que ficaram pra trás na fila
+   * são descartados (mas a Promise deles resolve normalmente).
+   */
+  private final ExecutorService displayExecutor = Executors.newSingleThreadExecutor();
+  private final AtomicInteger displayGeneration = new AtomicInteger();
+  private long lastDisplaySendAt = 0;
+  private static final long DISPLAY_MIN_INTERVAL_MS = 400;
   private Pix4Service displayService;
   private boolean displayResolved = false;
   private final BluetoothEscPosService bluetoothService = new BluetoothEscPosService();
@@ -63,6 +85,7 @@ public class CapacitorYoogaPosPlugin extends Plugin {
       discoveryService.cleanup();
     }
     networkScanner.stop();
+    displayExecutor.shutdownNow();
     releaseDisplayService();
     super.handleOnDestroy();
   }
@@ -70,6 +93,7 @@ public class CapacitorYoogaPosPlugin extends Plugin {
   @Override
   public void load() {
     super.load();
+    Log.i(TAG, "capacitor-yooga-pos v" + PLUGIN_VERSION);
     // Setup inicial exigido pela doc da Elgin para M10/PosGo.
     // A conexão é mantida aberta (sem FechaConexaoImpressora) para que o
     // service binding assíncrono do minipdvm8 tenha tempo de completar
@@ -137,33 +161,66 @@ public class CapacitorYoogaPosPlugin extends Plugin {
     displayResolved = false;
   }
 
-  @PluginMethod
-  public void showLogoOnDisplay(PluginCall call) {
+  private interface DisplayAction {
+    void run(Pix4Service display);
+  }
+
+  /**
+   * Enfileira uma operação no display. Se outra chegar antes desta rodar,
+   * esta é descartada (coalescência): o display só precisa mostrar o estado
+   * mais recente. Entre dois envios reais há um intervalo mínimo pro pipeline
+   * assíncrono do SDK (conversão + escrita SPI na main thread) terminar.
+   */
+  private void submitDisplayAction(PluginCall call, String name, DisplayAction action) {
+    final int generation = displayGeneration.incrementAndGet();
     try {
-      Pix4Service p = displayService();
-      if (p != null) {
-        p.apresentaImagemYooga();
-      }
-      call.resolve();
+      displayExecutor.execute(() -> {
+        if (generation != displayGeneration.get()) {
+          Log.d(TAG, name + " descartado: pedido mais novo na fila");
+          call.resolve();
+          return;
+        }
+        try {
+          Pix4Service p = displayService();
+          if (p != null) {
+            long wait = DISPLAY_MIN_INTERVAL_MS - (System.currentTimeMillis() - lastDisplaySendAt);
+            if (wait > 0) {
+              Thread.sleep(wait);
+            }
+            // Reconfere depois da espera: pode ter chegado pedido mais novo.
+            if (generation != displayGeneration.get()) {
+              Log.d(TAG, name + " descartado durante a espera");
+              call.resolve();
+              return;
+            }
+            action.run(p);
+            lastDisplaySendAt = System.currentTimeMillis();
+          }
+          call.resolve();
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          call.resolve();
+        } catch (Throwable t) {
+          Log.e(TAG, name + " erro: " + t.getMessage(), t);
+          call.reject("Erro no display (" + name + "): " + t.getMessage());
+        }
+      });
     } catch (Throwable t) {
-      Log.e(TAG, "showLogoOnDisplay erro: " + t.getMessage(), t);
-      call.reject("Erro ao exibir logo no display: " + t.getMessage());
+      // Executor já encerrado (plugin destruído).
+      Log.w(TAG, name + " ignorado: " + t.getMessage());
+      call.resolve();
     }
   }
 
   @PluginMethod
+  public void showLogoOnDisplay(PluginCall call) {
+    submitDisplayAction(call, "showLogoOnDisplay", Pix4Service::apresentaImagemYooga);
+  }
+
+  @PluginMethod
   public void showPix(PluginCall call) {
-    String value = call.getString("value");
-    try {
-      Pix4Service p = displayService();
-      if (p != null) {
-        p.apresentaPix(value);
-      }
-      call.resolve();
-    } catch (Throwable t) {
-      Log.e(TAG, "showPix erro: " + t.getMessage(), t);
-      call.reject("Erro ao exibir Pix no display: " + t.getMessage());
-    }
+    final String value = call.getString("value");
+    submitDisplayAction(call, "showPix", p -> p.apresentaPix(value));
   }
 
   @PluginMethod
