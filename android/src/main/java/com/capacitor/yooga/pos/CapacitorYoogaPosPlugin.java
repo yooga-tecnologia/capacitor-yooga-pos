@@ -21,12 +21,15 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
-import com.izettle.html2bitmap.Html2Bitmap;
 import com.izettle.html2bitmap.Html2BitmapConfigurator;
+import com.izettle.html2bitmap.YoogaHtml2Bitmap;
 import com.izettle.html2bitmap.content.WebViewContent;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 
 @CapacitorPlugin(
@@ -40,7 +43,28 @@ import java.io.FileOutputStream;
 public class CapacitorYoogaPosPlugin extends Plugin {
 
   private static final String TAG = "CapacitorYoogaPos";
+  /** Mantido em sincronia com package.json; sai no logcat no load para conferir o build instalado. */
+  private static final String PLUGIN_VERSION = "0.4.2";
   private boolean printerReady = false;
+
+  /**
+   * Fila do display do cliente. O SDK Elgin/iMin não serializa nada: cada
+   * chamada salva o frame em arquivos de caminho fixo no sdcard, converte num
+   * pool de threads sem limite e escreve o resultado no /dev/spidev na main
+   * thread. Duas chamadas próximas (showLogo do fechamento do Pix + showPix do
+   * próximo) disputam o mesmo arquivo e resetam o LCD no meio de uma
+   * transferência — a telinha trava e a main thread fica presa no SPI (ANR).
+   *
+   * Aqui: um executor único, intervalo mínimo entre envios e coalescência —
+   * só o pedido mais recente chega no SDK; os que ficaram pra trás na fila
+   * são descartados (mas a Promise deles resolve normalmente).
+   */
+  private final ExecutorService displayExecutor = Executors.newSingleThreadExecutor();
+  private final AtomicInteger displayGeneration = new AtomicInteger();
+  private long lastDisplaySendAt = 0;
+  private static final long DISPLAY_MIN_INTERVAL_MS = 400;
+  private Pix4Service displayService;
+  private boolean displayResolved = false;
   private final BluetoothEscPosService bluetoothService = new BluetoothEscPosService();
   private final com.capacitor.yooga.pos.bluetooth.TcpEscPosService tcpService =
     new com.capacitor.yooga.pos.bluetooth.TcpEscPosService();
@@ -61,12 +85,15 @@ public class CapacitorYoogaPosPlugin extends Plugin {
       discoveryService.cleanup();
     }
     networkScanner.stop();
+    displayExecutor.shutdownNow();
+    releaseDisplayService();
     super.handleOnDestroy();
   }
 
   @Override
   public void load() {
     super.load();
+    Log.i(TAG, "capacitor-yooga-pos v" + PLUGIN_VERSION);
     // Setup inicial exigido pela doc da Elgin para M10/PosGo.
     // A conexão é mantida aberta (sem FechaConexaoImpressora) para que o
     // service binding assíncrono do minipdvm8 tenha tempo de completar
@@ -105,65 +132,128 @@ public class CapacitorYoogaPosPlugin extends Plugin {
     return printerReady;
   }
 
+  /**
+   * Display do cliente (traseiro). Instância única: cada `new` refazia o
+   * E1_Display.init. Fica null em aparelho sem display suportado — aí os
+   * métodos de display viram no-op em vez de inicializar o SDK Elgin.
+   */
+  private synchronized Pix4Service displayService() {
+    if (!displayResolved) {
+      displayService = Pix4Service.createIfSupported(getActivity());
+      displayResolved = true;
+    }
+    return displayService;
+  }
+
+  /**
+   * Fecha a conexão do SDK com o display (no M11 libera o serviço da
+   * impressora/LCD; no iMin é no-op) e permite recriar numa Activity nova.
+   */
+  private synchronized void releaseDisplayService() {
+    if (displayService != null) {
+      try {
+        displayService.desconectarDisplay();
+      } catch (Throwable t) {
+        Log.w(TAG, "desconectarDisplay erro: " + t.getMessage(), t);
+      }
+    }
+    displayService = null;
+    displayResolved = false;
+  }
+
+  private interface DisplayAction {
+    void run(Pix4Service display);
+  }
+
+  /**
+   * Enfileira uma operação no display. Se outra chegar antes desta rodar,
+   * esta é descartada (coalescência): o display só precisa mostrar o estado
+   * mais recente. Entre dois envios reais há um intervalo mínimo pro pipeline
+   * assíncrono do SDK (conversão + escrita SPI na main thread) terminar.
+   */
+  private void submitDisplayAction(PluginCall call, String name, DisplayAction action) {
+    final int generation = displayGeneration.incrementAndGet();
+    try {
+      displayExecutor.execute(() -> {
+        if (generation != displayGeneration.get()) {
+          Log.d(TAG, name + " descartado: pedido mais novo na fila");
+          call.resolve();
+          return;
+        }
+        try {
+          Pix4Service p = displayService();
+          if (p != null) {
+            long wait = DISPLAY_MIN_INTERVAL_MS - (System.currentTimeMillis() - lastDisplaySendAt);
+            if (wait > 0) {
+              Thread.sleep(wait);
+            }
+            // Reconfere depois da espera: pode ter chegado pedido mais novo.
+            if (generation != displayGeneration.get()) {
+              Log.d(TAG, name + " descartado durante a espera");
+              call.resolve();
+              return;
+            }
+            action.run(p);
+            lastDisplaySendAt = System.currentTimeMillis();
+          }
+          call.resolve();
+        } catch (InterruptedException e) {
+          Thread.currentThread().interrupt();
+          call.resolve();
+        } catch (Throwable t) {
+          Log.e(TAG, name + " erro: " + t.getMessage(), t);
+          call.reject("Erro no display (" + name + "): " + t.getMessage());
+        }
+      });
+    } catch (Throwable t) {
+      // Executor já encerrado (plugin destruído).
+      Log.w(TAG, name + " ignorado: " + t.getMessage());
+      call.resolve();
+    }
+  }
+
   @PluginMethod
   public void showLogoOnDisplay(PluginCall call) {
-    Pix4Service p = new Pix4Service(getActivity());
-    p.apresentaImagemYooga();
-    call.resolve();
+    submitDisplayAction(call, "showLogoOnDisplay", Pix4Service::apresentaImagemYooga);
   }
 
   @PluginMethod
   public void showPix(PluginCall call) {
-    String value = call.getString("value");
-    Pix4Service p = new Pix4Service(getActivity());
-    p.apresentaPix(value);
-    call.resolve();
+    final String value = call.getString("value");
+    submitDisplayAction(call, "showPix", p -> p.apresentaPix(value));
   }
 
   @PluginMethod
   public void print(PluginCall call) {
-    String html = call.getString("html");
     Integer cutPaperLength = call.getInt("cutPaperLength", 4);
-    Integer webViewZoom = call.getInt("webViewZoom", 100);
-    Integer bitmapWidth = call.getInt("bitmapWidth", 384);
-    Integer measureDelay = call.getInt("measureDelay", 0);
-    Integer screenshotDelay = call.getInt("screenshotDelay", 0);
-    Boolean strictMode = call.getBoolean("strictMode", false);
-    Integer timeout = call.getInt("timeout", 30000);
-    Integer builderTextZoom = call.getInt("builderTextZoom", 100);
 
     Log.d(TAG, "print() chamado, printerReady=" + printerReady);
     ensurePrinterConnection();
 
-    Html2BitmapConfigurator html2BitmapConfigurator = new Html2BitmapConfigurator() {
-      @Override
-      public void configureWebView(WebView webview) {
-        webview.getSettings().setTextZoom(webViewZoom);
+    Bitmap bitmap = null;
+    try {
+      bitmap = renderHtmlToBitmap(call);
+      Log.d(TAG, "bitmap: " + (bitmap != null ? bitmap.getWidth() + "x" + bitmap.getHeight() : "NULL"));
+      if (bitmap == null) {
+        call.reject("Falha ao converter o HTML em bitmap para impressão");
+        return;
       }
-    };
 
-    Html2Bitmap build = new Html2Bitmap.Builder()
-      .setContext(getContext())
-      .setContent(WebViewContent.html(html))
-      .setBitmapWidth(bitmapWidth)
-      .setMeasureDelay(measureDelay)
-      .setScreenshotDelay(screenshotDelay)
-      .setStrictMode(strictMode)
-      .setTimeout(timeout)
-      .setTextZoom(builderTextZoom)
-      .setConfigurator(html2BitmapConfigurator)
-      .build();
+      int printResult = Termica.ImprimeBitmap(bitmap);
+      Log.d(TAG, "ImprimeBitmap: " + printResult);
 
-    Bitmap bitmap = build.getBitmap();
-    Log.d(TAG, "bitmap: " + (bitmap != null ? bitmap.getWidth() + "x" + bitmap.getHeight() : "NULL"));
+      int cutResult = Termica.Corte(cutPaperLength);
+      Log.d(TAG, "Corte: " + cutResult);
 
-    int printResult = Termica.ImprimeBitmap(bitmap);
-    Log.d(TAG, "ImprimeBitmap: " + printResult);
-
-    int cutResult = Termica.Corte(cutPaperLength);
-    Log.d(TAG, "Corte: " + cutResult);
-
-    call.resolve();
+      call.resolve();
+    } catch (Throwable t) {
+      Log.e(TAG, "print erro: " + t.getMessage(), t);
+      call.reject("Erro na impressão: " + t.getMessage());
+    } finally {
+      if (bitmap != null) {
+        bitmap.recycle();
+      }
+    }
   }
 
   @PluginMethod
@@ -800,18 +890,19 @@ public class CapacitorYoogaPosPlugin extends Plugin {
       }
     };
 
-    return new Html2Bitmap.Builder()
-      .setContext(getContext())
-      .setContent(WebViewContent.html(html))
-      .setBitmapWidth(bitmapWidth)
-      .setMeasureDelay(measureDelay)
-      .setScreenshotDelay(screenshotDelay)
-      .setStrictMode(strictMode)
-      .setTimeout(timeout)
-      .setTextZoom(builderTextZoom)
-      .setConfigurator(configurator)
-      .build()
-      .getBitmap();
+    // YoogaHtml2Bitmap em vez de Html2Bitmap.getBitmap(): mesmo render, mas
+    // libera a thread e o WebView de cada job e trata o timeout em ms.
+    return YoogaHtml2Bitmap.render(
+      getContext(),
+      WebViewContent.html(html),
+      bitmapWidth,
+      measureDelay,
+      screenshotDelay,
+      strictMode,
+      timeout,
+      builderTextZoom,
+      configurator
+    );
   }
 
   /**
